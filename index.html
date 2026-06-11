@@ -591,6 +591,7 @@ const TL = {
    mesure des constructions : la ville s'étend encore et encore, boulevard
    après boulevard. */
 const HW=16, HH=8;                              // tuile 32×16
+const SS=3;                                     // suréchantillonnage des sprites → rendu lisse
 const N=71, C=35, R_MAX=35;                     // ~3 500 parcelles constructibles
 const ringOf=(i,j)=>Math.max(Math.abs(i-C),Math.abs(j-C));
 const ringRoad=v=>v>=4&&(v-4)%5===0;            // boulevards concentriques tous les 5 anneaux
@@ -680,10 +681,11 @@ function unlockTo(c,R){
   }
 }
 function newCity(){
-  const ground=document.createElement('canvas'); ground.width=GW; ground.height=GH;
+  const ground=document.createElement('canvas'); ground.width=GW*SS; ground.height=GH*SS;
+  const gx=ground.getContext('2d'); gx.scale(SS,SS);
   const c={
     idx:0, cx:0, cy:0,
-    ground, gctx:ground.getContext('2d'),
+    ground, gctx:gx,
     occupied:Array.from({length:N},()=>new Array(N).fill(false)),
     unlockedR:0, dispR:4, tilePops:[], drawList:[], count:0, fountainAt:null,
   };
@@ -747,8 +749,9 @@ function buildingSprite(co, dead){
   const pitched = S.roof==='pitched';
   const roofH = pitched? hh+9 : 6;
   const W = hw*2+10, H = wallH + hh*2 + roofH + 14;
-  const cv = document.createElement('canvas'); cv.width=W; cv.height=H;
-  const g = cv.getContext('2d');
+  const cv = document.createElement('canvas'); cv.width=W*SS; cv.height=H*SS;
+  cv.lw=W; cv.lh=H;                              // taille logique pour le rendu
+  const g = cv.getContext('2d'); g.scale(SS,SS);
   const rnd = mulberry32(co.sector*97+co.tier*13+co.variant*7+5);
   const wall = S.walls[co.variant % S.walls.length];
   const cx=W/2, by=H-2;
@@ -763,6 +766,16 @@ function buildingSprite(co, dead){
   /* faces */
   poly([L,B,up(B,wallH),up(L,wallH)], shade(wall,-32));            // face gauche (ombre)
   poly([B,Rr,up(Rr,wallH),up(B,wallH)], wall);                      // face droite (lumière)
+  /* modelé doux : lumière en haut des murs, ombre au pied */
+  {
+    const gr=g.createLinearGradient(0,by-wallH,0,by);
+    gr.addColorStop(0,'rgba(255,255,255,.16)');
+    gr.addColorStop(.55,'rgba(255,255,255,0)');
+    gr.addColorStop(1,'rgba(43,33,24,.10)');
+    g.fillStyle=gr;
+    g.beginPath(); g.moveTo(L[0],L[1]); g.lineTo(B[0],B[1]); g.lineTo(B[0],B[1]-wallH); g.lineTo(L[0],L[1]-wallH); g.closePath(); g.fill();
+    g.beginPath(); g.moveTo(B[0],B[1]); g.lineTo(Rr[0],Rr[1]); g.lineTo(Rr[0],Rr[1]-wallH); g.lineTo(B[0],B[1]-wallH); g.closePath(); g.fill();
+  }
   /* plinthe */
   poly([L,B,up(B,2),up(L,2)], shade(wall,-55));
   poly([B,Rr,up(Rr,2),up(B,2)], shade(wall,-40));
@@ -843,11 +856,13 @@ function buildingSprite(co, dead){
   }
   if(dead){
     /* carcasse calcinée */
-    const cv2=document.createElement('canvas'); cv2.width=W; cv2.height=H;
+    const cv2=document.createElement('canvas'); cv2.width=W*SS; cv2.height=H*SS;
+    cv2.lw=W; cv2.lh=H;
     const g2=cv2.getContext('2d');
     g2.filter='grayscale(0.55) brightness(0.4) sepia(0.3)';
     g2.drawImage(cv,0,0);
     g2.filter='none';
+    g2.scale(SS,SS);
     const rs=mulberry32(co.variant*31+7);
     g2.fillStyle='rgba(255,120,40,0.85)';                 // braises résiduelles
     for(let k=0;k<3;k++) g2.fillRect(Math.round(cx+(rs()-0.5)*hw), Math.round(by-4-rs()*wallH), 1,1);
@@ -858,8 +873,9 @@ function buildingSprite(co, dead){
 function mascotSprite(){
   const key='mascot';
   if(spriteCache[key]) return spriteCache[key];
-  const cv=document.createElement('canvas'); cv.width=14; cv.height=18;
-  const g=cv.getContext('2d');
+  const cv=document.createElement('canvas'); cv.width=14*SS; cv.height=18*SS;
+  cv.lw=14; cv.lh=18;
+  const g=cv.getContext('2d'); g.scale(SS,SS);
   /* casquette bleue */
   g.fillStyle='#2F6BD8'; g.fillRect(4,0,6,1); g.fillRect(3,1,8,2);
   g.fillStyle='#1F4FA8'; g.fillRect(3,3,10,1);                       // visière
@@ -882,8 +898,9 @@ function townHallSprite(){
   if(spriteCache[key]) return spriteCache[key];
   const hw=30, hh=15, wallH=26;                  // emprise 2×2 tuiles
   const W=hw*2+14, H=wallH+hh*2+36;
-  const cv=document.createElement('canvas'); cv.width=W; cv.height=H;
-  const g=cv.getContext('2d');
+  const cv=document.createElement('canvas'); cv.width=W*SS; cv.height=H*SS;
+  cv.lw=W; cv.lh=H;
+  const g=cv.getContext('2d'); g.scale(SS,SS);
   const cx=W/2, by=H-3;
   const P=(x,y)=>[Math.round(x),Math.round(y)];
   const poly=(pts,c)=>{ g.fillStyle=c; g.beginPath(); g.moveTo(pts[0][0],pts[0][1]); for(let k=1;k<pts.length;k++) g.lineTo(pts[k][0],pts[k][1]); g.closePath(); g.fill(); };
@@ -948,7 +965,7 @@ function townHallSprite(){
   g.fillStyle='#FA5D19'; g.fillRect(fx,fy-22,8,4); g.fillRect(fx,fy-18,6,1);
   /* frise-enseigne « LA BOUTIQUE PME », accrochée à l'avant-toit (dessinée
      après le toit pour rester entièrement lisible) */
-  g.font='9px VT323';
+  g.font='800 6.5px Outfit';
   const txt='LA BOUTIQUE PME';
   const tw=Math.ceil(g.measureText(txt).width);
   const bw=Math.min(W-4,tw+10), bx0=Math.round(cx-bw/2), byy=by-hh-wallH+1;
@@ -956,7 +973,8 @@ function townHallSprite(){
   g.fillStyle='#2B2118'; g.fillRect(bx0,byy,bw,12);
   g.fillStyle='#FBF4E7'; g.fillRect(bx0+1,byy+1,bw-2,10);
   g.fillStyle='#C8542E'; g.textAlign='center'; g.textBaseline='middle';
-  g.fillText(txt,cx,byy+6);
+  g.font='800 6.5px Outfit';
+  g.fillText(txt,cx,byy+6.5);
   spriteCache[key]=cv; return cv;
 }
 function signSprite(){
@@ -968,8 +986,9 @@ function signSprite(){
   const txt='LA BOUTIQUE PME';
   const tw=Math.ceil(g0.measureText(txt).width);
   const W=tw+14, H=26;
-  cv.width=W; cv.height=H;
-  const g=cv.getContext('2d');
+  cv.width=W*SS; cv.height=H*SS;
+  cv.lw=W; cv.lh=H;
+  const g=cv.getContext('2d'); g.scale(SS,SS);
   /* poteaux bois */
   g.fillStyle='#8A5A36'; g.fillRect(4,12,3,13); g.fillRect(W-7,12,3,13);
   g.fillStyle='#6E4428'; g.fillRect(6,12,1,13); g.fillRect(W-5,12,1,13);
@@ -988,8 +1007,9 @@ if(document.fonts && document.fonts.ready) document.fonts.ready.then(()=>{ delet
 function treeSprite(v){
   const key='tree'+v;
   if(spriteCache[key]) return spriteCache[key];
-  const cv=document.createElement('canvas'); cv.width=18; cv.height=24;
-  const g=cv.getContext('2d');
+  const cv=document.createElement('canvas'); cv.width=18*SS; cv.height=24*SS;
+  cv.lw=18; cv.lh=24;
+  const g=cv.getContext('2d'); g.scale(SS,SS);
   g.fillStyle='#6B4A2E'; g.fillRect(8,16,2,6);
   const greens=[['#7FA05A','#9DBE7A'],['#6E945E','#8CB478'],['#85A050','#A3BE6E']][v];
   g.fillStyle=greens[0];
@@ -1367,7 +1387,7 @@ function frame(){
   ctx.setTransform(DPR,0,0,DPR,0,0);
   ctx.clearRect(0,0,vw,vh);
   ctx.translate(cam.x,cam.y); ctx.scale(cam.z,cam.z);
-  ctx.imageSmoothingEnabled=false;
+  ctx.imageSmoothingEnabled=true; ctx.imageSmoothingQuality='high';
 
   /* îles : pops de terrain + socle + sol */
   for(const c of cities){
@@ -1380,7 +1400,7 @@ function frame(){
     const eR=c.dispR+1.5;
     ctx.fillStyle='rgba(43,33,24,.10)';
     ctx.beginPath(); ctx.ellipse(c.cx, c.cy+8, eR*2*HW, eR*2*HH*1.06, 0, 0, 7); ctx.fill();
-    ctx.drawImage(c.ground, c.cx-GW/2, c.cy-2*C*HH);
+    ctx.drawImage(c.ground, c.cx-GW/2, c.cy-2*C*HH, GW, GH);
   }
 
   pickBoxes=[];
@@ -1393,13 +1413,13 @@ function frame(){
         const bob=Math.round(Math.sin(t*2.4)*1.2);
         ctx.fillStyle='rgba(43,33,24,.18)';
         ctx.beginPath(); ctx.ellipse(px,py-1,6,2.4,0,0,7); ctx.fill();
-        ctx.drawImage(s, px-7, py-s.height-1+bob);
+        ctx.drawImage(s, px-7, py-s.lh-1+bob, s.lw, s.lh);
       } else if(d.prop.kind==='hdv'){
         const s=townHallSprite();
-        ctx.drawImage(s, Math.round(px-s.width/2), py-s.height);
+        ctx.drawImage(s, Math.round(px-s.lw/2), py-s.lh, s.lw, s.lh);
       } else if(d.prop.kind==='sign'){
         const s=signSprite();
-        ctx.drawImage(s, Math.round(px-s.width/2), py-s.height);
+        ctx.drawImage(s, Math.round(px-s.lw/2), py-s.lh, s.lw, s.lh);
       } else {
         const s=treeSprite(d.prop.v);
         const g=d.prop.born? Math.min(1,Math.max(0,(t-d.prop.born)/0.35)) : 1;
@@ -1419,27 +1439,27 @@ function frame(){
       const p=Math.min(1,(t-b.t0)/b.dur);
       const spr=buildingSprite(co,false);
       const e = p<0.85? p/0.85 : 1;
-      const hVis=Math.round(spr.height*e*e);
+      const hVis=Math.round(spr.lh*e*e);
       ctx.save();
-      ctx.beginPath(); ctx.rect(bx-spr.width/2-4, bottomY-hVis, spr.width+8, hVis+2); ctx.clip();
+      ctx.beginPath(); ctx.rect(bx-spr.lw/2-4, bottomY-hVis, spr.lw+8, hVis+2); ctx.clip();
       const squash = p>0.85? 1+0.06*Math.sin((p-0.85)/0.15*Math.PI) : 1;
-      ctx.drawImage(spr, bx-spr.width/2, bottomY-spr.height*squash, spr.width, spr.height*squash);
+      ctx.drawImage(spr, bx-spr.lw/2, bottomY-spr.lh*squash, spr.lw, spr.lh*squash);
       ctx.restore();
       /* échafaudage */
       ctx.strokeStyle='rgba(122,90,50,.8)'; ctx.lineWidth=1;
-      const sh=Math.min(spr.height-6, hVis+8);
+      const sh=Math.min(spr.lh-6, hVis+8);
       ctx.beginPath();
-      ctx.moveTo(bx-spr.width/2+2,bottomY); ctx.lineTo(bx-spr.width/2+2,bottomY-sh);
-      ctx.moveTo(bx+spr.width/2-2,bottomY); ctx.lineTo(bx+spr.width/2-2,bottomY-sh);
-      for(let yy=bottomY-6; yy>bottomY-sh; yy-=7){ ctx.moveTo(bx-spr.width/2+2,yy); ctx.lineTo(bx+spr.width/2-2,yy); }
+      ctx.moveTo(bx-spr.lw/2+2,bottomY); ctx.lineTo(bx-spr.lw/2+2,bottomY-sh);
+      ctx.moveTo(bx+spr.lw/2-2,bottomY); ctx.lineTo(bx+spr.lw/2-2,bottomY-sh);
+      for(let yy=bottomY-6; yy>bottomY-sh; yy-=7){ ctx.moveTo(bx-spr.lw/2+2,yy); ctx.lineTo(bx+spr.lw/2-2,yy); }
       ctx.stroke();
       if(Math.random()<0.35) dust(bx,bottomY,1,'171,141,99');
       if(p>=1){
         b.state='built';
         dust(bx,bottomY,12,'171,141,99');
         sfxDing(co.tier>=3);
-        if(b.ev&&co.priceKnown) floats.push({x:bx,y:bottomY-spr.height-6,age:0,txt:'+'+fmtCompact(co.price),c:'#C8542E'});
-        else if(b.ev) floats.push({x:bx,y:bottomY-spr.height-6,age:0,txt:'transmise ✓',c:'#6E8B5E'});
+        if(b.ev&&co.priceKnown) floats.push({x:bx,y:bottomY-spr.lh-6,age:0,txt:'+'+fmtCompact(co.price),c:'#C8542E'});
+        else if(b.ev) floats.push({x:bx,y:bottomY-spr.lh-6,age:0,txt:'transmise ✓',c:'#6E8B5E'});
       }
     } else if(b.state==='dying'){
       /* incendie : lueur, flammes, fumée, puis carcasse calcinée */
@@ -1448,21 +1468,21 @@ function frame(){
       if(p<0.92){
         const fl=(0.2+0.13*Math.sin(t*23+b.i*7))*(1-p*0.7);
         ctx.fillStyle=`rgba(250,93,25,${fl.toFixed(3)})`;
-        ctx.beginPath(); ctx.ellipse(bx, bottomY-spr.height*0.4, spr.width*0.75, spr.height*0.6, 0, 0, 7); ctx.fill();
+        ctx.beginPath(); ctx.ellipse(bx, bottomY-spr.lh*0.4, spr.lw*0.75, spr.lh*0.6, 0, 0, 7); ctx.fill();
       }
-      ctx.drawImage(spr, bx-spr.width/2, bottomY-spr.height);
+      ctx.drawImage(spr, bx-spr.lw/2, bottomY-spr.lh, spr.lw, spr.lh);
       if(p<0.85){
-        flame(bx+(Math.random()-0.5)*spr.width*0.7, bottomY-Math.random()*spr.height*0.85);
-        if(Math.random()<0.7) flame(bx+(Math.random()-0.5)*spr.width*0.5, bottomY-spr.height*(0.4+Math.random()*0.5));
-        if(Math.random()<0.55) smoke(bx, bottomY-spr.height*0.95);
-      } else if(Math.random()<0.4) smoke(bx, bottomY-spr.height*0.7);
+        flame(bx+(Math.random()-0.5)*spr.lw*0.7, bottomY-Math.random()*spr.lh*0.85);
+        if(Math.random()<0.7) flame(bx+(Math.random()-0.5)*spr.lw*0.5, bottomY-spr.lh*(0.4+Math.random()*0.5));
+        if(Math.random()<0.55) smoke(bx, bottomY-spr.lh*0.95);
+      } else if(Math.random()<0.4) smoke(bx, bottomY-spr.lh*0.7);
       if(p>=1) b.state='dead';
-      pickBoxes.push({x:bx-spr.width/2,y:bottomY-spr.height,w:spr.width,h:spr.height,b});
+      pickBoxes.push({x:bx-spr.lw/2,y:bottomY-spr.lh,w:spr.lw,h:spr.lh,b});
     } else {
       const spr=buildingSprite(co, b.state==='dead');
-      ctx.drawImage(spr, bx-spr.width/2, bottomY-spr.height);
-      if(b.state==='dead'&&Math.random()<0.008) smoke(bx, bottomY-spr.height*0.8);   // fumerolles
-      pickBoxes.push({x:bx-spr.width/2,y:bottomY-spr.height,w:spr.width,h:spr.height,b});
+      ctx.drawImage(spr, bx-spr.lw/2, bottomY-spr.lh, spr.lw, spr.lh);
+      if(b.state==='dead'&&Math.random()<0.008) smoke(bx, bottomY-spr.lh*0.8);   // fumerolles
+      pickBoxes.push({x:bx-spr.lw/2,y:bottomY-spr.lh,w:spr.lw,h:spr.lh,b});
     }
     ctx.globalAlpha=1;
   }
@@ -1482,7 +1502,7 @@ function frame(){
     const f=floats[k]; f.age+=dt;
     if(f.age>1.6){ floats.splice(k,1); continue; }
     ctx.globalAlpha=Math.max(0,1-f.age/1.6);
-    ctx.font='12px VT323'; ctx.fillStyle=f.c;
+    ctx.font='700 10px Outfit'; ctx.fillStyle=f.c;
     ctx.fillText(f.txt, f.x, f.y-f.age*16);
     ctx.globalAlpha=1;
   }
