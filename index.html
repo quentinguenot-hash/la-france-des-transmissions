@@ -265,6 +265,8 @@
     font-size:clamp(26px,4.4vw,40px); line-height:1.05; color:var(--encre);
   }
   .overlay h2 em{ color:var(--terracotta); font-style:italic; }
+  .overlay h2 .h2-ferme{ display:inline-block; margin-top:8px; font-size:.72em; color:#6B4A3C; }
+  .overlay h2 .h2-ferme em{ color:#A8431F; }
   .overlay p.sub{ margin-top:14px; font-size:15px; color:var(--muted); line-height:1.5; }
   .overlay .stats{ font-family:'VT323', monospace; font-size:22px; color:var(--terracotta); margin-top:12px; line-height:1.4; }
   .big-btn{
@@ -300,7 +302,7 @@
 <div class="hud card" id="hud-title">
   <div class="eyebrow">Bulletin des transmissions</div>
   <h1>La France <span>des</span> Transmissions</h1>
-  <p>Toutes les <strong id="t-cadence">12 minutes</strong>, une entreprise française change de mains. Chaque bâtiment qui se construit est une cession réelle publiée au BODACC.</p>
+  <p>Toutes les <strong id="t-cadence">12 minutes</strong>, une entreprise française change de mains. Toutes les <strong id="t-cadence-liq" style="color:#A8431F">13 minutes</strong>, une autre ferme définitivement. Chaque bâtiment construit est une cession réelle du BODACC — chaque maison qui brûle, une liquidation judiciaire.</p>
   <span class="poc-tag" id="poc-tag">POC · DONNÉES FICTIVES</span>
 </div>
 
@@ -342,7 +344,8 @@
 <div class="overlay" id="overlay-intro">
   <div class="panel card">
     <div class="ornament">Le BODACC, en direct</div>
-    <h2>Toutes les <em id="i-cadence">12 minutes</em>, une entreprise française change de mains.</h2>
+    <h2>Toutes les <em id="i-cadence">12 minutes</em>, une entreprise française change de mains.<br>
+    <span class="h2-ferme">Toutes les <em id="i-cadence-liq">13 minutes</em>, une autre ferme pour de bon.</span></h2>
     <p class="sub" id="i-sub">700 000 entreprises à transmettre d'ici 10 ans. Voici à quoi ressemble la vague — un mois de cessions, rejoué en 3 minutes.</p>
     <button class="big-btn" id="b-start">▶&nbsp;&nbsp;Regardez</button>
     <div style="margin-top:13px">
@@ -494,9 +497,16 @@ const LIQ_RATIO = (REAL && REAL.liquidations.length)? Math.max(1, (LIQ_TOTAL||0)
 
 /* ---------- Libellés dynamiques ---------- */
 {
-  const cad = CADENCE+' minutes';
+  const cadTxt = m => m<120? m+' minutes' : Math.round(m/60)+' heures';
+  const cad = cadTxt(CADENCE);
+  const liqTotalForCad = REAL? (REAL.stats.liquidationsTotal||0) : 34;
+  const liqCad = liqTotalForCad>0? cadTxt(Math.max(1,Math.round(PERIOD.days*1440/liqTotalForCad))) : null;
   document.getElementById('t-cadence').textContent = cad;
   document.getElementById('i-cadence').textContent = cad;
+  if(liqCad){
+    document.getElementById('t-cadence-liq').textContent = liqCad;
+    document.getElementById('i-cadence-liq').textContent = liqCad;
+  }
   document.getElementById('c-since').textContent = 'Depuis le '+fmtDate(PERIOD.from);
   if(REAL){
     document.getElementById('poc-tag').textContent = 'DONNÉES RÉELLES BODACC';
@@ -1494,7 +1504,7 @@ function drawExportHud(){
   ctx.font='italic 900 26px Fraunces'; ctx.fillStyle='#C8542E';
   ctx.fillText('LA FRANCE DES TRANSMISSIONS', pad, pad);
   ctx.font='600 13px Outfit'; ctx.fillStyle='#6B5A48';
-  ctx.fillText(`Toutes les ${CADENCE} minutes, une entreprise française change de mains — BODACC, données réelles`, pad, pad+32);
+  ctx.fillText(`Toutes les ${CADENCE} min, une entreprise change de mains — et une autre ferme. BODACC, données réelles.`, pad, pad+32);
   ctx.textAlign='right';
   ctx.font='44px VT323'; ctx.fillStyle='#2B2118';
   ctx.fillText(Math.round(disp.count).toLocaleString('fr-FR')+' transmissions', vw-pad, pad-4);
