@@ -92,7 +92,13 @@
   .tl-track{
     position:relative; height:7px; border-radius:99px;
     background:#E6D8BC; box-shadow:inset 0 1px 2px rgba(43,33,24,.25);
+    cursor:pointer; touch-action:none;
   }
+  .tl-track::before{ /* zone de saisie élargie */
+    content:""; position:absolute; left:-4px; right:-4px; top:-10px; bottom:-10px;
+  }
+  .tl-track:hover .tl-cursor{ transform:translate(-50%,-50%) scale(1.25); }
+  .tl-cursor{ transition:transform .12s; }
   .tl-tick{
     position:absolute; top:-3px; width:1px; height:13px;
     background:rgba(43,33,24,.22);
@@ -218,6 +224,28 @@
   #tooltip .t-meta{ color:#C9B79E; font-size:11px; margin-top:2px; }
   #tooltip.dead .t-prix{ color:#B89D9D; }
 
+  /* Bulle de la mascotte */
+  #bubble{
+    position:fixed; z-index:24; max-width:236px; min-height:20px;
+    transform:translate(-50%,-100%);
+    background:var(--creme-2); border:1.5px solid var(--encre); border-radius:12px;
+    padding:9px 13px; font-size:12.5px; line-height:1.45; color:var(--encre); font-weight:500;
+    box-shadow:3px 4px 0 rgba(43,33,24,.14), 0 12px 26px rgba(43,33,24,.12);
+    opacity:0; transition:opacity .25s; pointer-events:none; text-align:left;
+  }
+  #bubble.show{ opacity:1; }
+  #bubble::after{
+    content:""; position:absolute; left:50%; bottom:-7.5px; width:12px; height:12px;
+    transform:translateX(-50%) rotate(45deg);
+    background:var(--creme-2);
+    border-right:1.5px solid var(--encre); border-bottom:1.5px solid var(--encre);
+  }
+  #bubble b{ color:var(--terracotta); }
+  #bubble.cta{ pointer-events:auto; cursor:pointer; background:#FFF1E5; }
+  #bubble.cta::after{ background:#FFF1E5; }
+  #bubble.cta:hover{ background:#FFE7D2; }
+  #bubble.cta:hover::after{ background:#FFE7D2; }
+
   /* Overlays (intro / fin) */
   .overlay{
     position:fixed; inset:0; z-index:50; display:flex; align-items:center; justify-content:center;
@@ -308,6 +336,7 @@
 </div>
 
 <div id="tooltip"></div>
+<div id="bubble"><span id="bubble-text"></span></div>
 
 <!-- Intro -->
 <div class="overlay" id="overlay-intro">
@@ -347,7 +376,7 @@
 
 /* ---------- RNG seedé (replay déterministe) ---------- */
 function mulberry32(a){ return function(){ a|=0; a=a+0x6D2B79F5|0; let t=Math.imul(a^a>>>15,1|a); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
-const R = mulberry32(20260611);
+let R = mulberry32(20260611);   // re-seedé lors d'un scrub timeline (rebuild déterministe)
 const pick = (arr, rnd=R) => arr[Math.floor(rnd()*arr.length)];
 
 /* ---------- Palette utilitaire ---------- */
@@ -508,6 +537,43 @@ const TL = {
     track.appendChild(tick);
   }
   TL.date.textContent = fmtDateLong(PERIOD.from);
+
+  /* scrub : cliquer/glisser sur la barre pour naviguer dans le mois */
+  TL.scrub=false;
+  const fracFrom=e=>{
+    const r=track.getBoundingClientRect();
+    return Math.min(1,Math.max(0,(e.clientX-r.left)/r.width));
+  };
+  const preview=f=>{
+    TL.disp=f;
+    TL.fill.style.width=(f*100)+'%';
+    TL.cursor.style.left=(f*100)+'%';
+    TL.date.innerHTML=fmtDateLong(new Date(TL.from+f*(TL.to-TL.from))).replace(/^(\S+)/,'<b>$1</b>');
+  };
+  const commit=f=>{
+    const targetTime=TL.from+f*(TL.to-TL.from)+43200e3;   // milieu de journée : inclut le jour visé
+    let idx=0;
+    while(idx<events.length && events[idx].date.getTime()<=targetTime) idx++;
+    rebuildTo(idx);
+  };
+  track.addEventListener('pointerdown',e=>{
+    if(!running) return;
+    TL.scrub=true; track.setPointerCapture(e.pointerId);
+    preview(fracFrom(e));
+  });
+  let lastScrubCommit=0;
+  track.addEventListener('pointermove',e=>{
+    if(!TL.scrub) return;
+    const f=fracFrom(e);
+    preview(f);
+    const n=performance.now();
+    if(n-lastScrubCommit>90){ lastScrubCommit=n; commit(f); }   // la ville se reconstruit en live (~25 ms)
+  });
+  track.addEventListener('pointerup',e=>{
+    if(!TL.scrub) return;
+    TL.scrub=false;
+    commit(fracFrom(e));
+  });
 }
 
 /* ---------- Grille isométrique — une seule grande ville extensible ----------
@@ -988,15 +1054,19 @@ const disp  = { count:0, money:0, dead:0 };
 let currentDate=null;
 function nowS(){ return performance.now()/1000; }
 
+let fastForward=false;   // mode scrub : événements appliqués sans animation ni son
 function fireEvent(ev){
   currentDate = ev.date;
   if(ev.kind==='cession'){
-    const dur = Math.max(0.45, 1.5/speed);
+    const dur = fastForward? 0 : Math.max(0.45, 1.5/speed);
     const b = addBuilding(ev.co, dur, ev);
+    if(fastForward && b) b.state='built';
     stats.count++;
     if(ev.co.priceKnown) stats.money += ev.co.price;
-    feed(ev.co, false, ev.date);
-    if(b){ sfxHammer(); setTimeout(sfxHammer, dur*450); }
+    if(!fastForward){
+      feed(ev.co, false, ev.date);
+      if(b){ sfxHammer(); setTimeout(sfxHammer, dur*450); }
+    }
   } else {
     const alive = buildings.filter(b=>b.state==='built');
     if(!alive.length) return;
@@ -1005,11 +1075,42 @@ function fireEvent(ev){
     const b = (pool.length? pool : alive)[Math.floor(R()*(pool.length? pool.length : alive.length))];
     if(ev.co) b.co = { ...b.co, name:ev.co.name, city:ev.co.city, dept:ev.co.dept,
                        activity:ev.co.activity, priceKnown:false };
-    b.state='dying'; b.t0=nowS(); b.deathDate=ev.date;
+    b.state = fastForward? 'dead' : 'dying';
+    b.t0=nowS(); b.deathDate=ev.date;
     stats.dead++;
-    feed(b.co, true, ev.date);
-    sfxOut();
+    if(!fastForward){ feed(b.co, true, ev.date); sfxOut(); }
   }
+}
+
+/* ---------- Scrub : reconstruit le monde jusqu'à l'événement targetIdx ---------- */
+function rebuildTo(targetIdx){
+  targetIdx = Math.max(0, Math.min(events.length, targetIdx));
+  cities.length=0; buildings.length=0; particles.length=0; floats.length=0;
+  R = mulberry32(20260611);
+  newCity();
+  stats.count=0; stats.money=0; stats.dead=0;
+  fastForward=true;
+  for(const sco of stock){
+    const b=addBuilding(sco,0);
+    if(b) b.state='built';
+    stats.count++;
+    if(sco.priceKnown) stats.money += sco.price;
+  }
+  stockIdx=stock.length;
+  for(evtIdx=0; evtIdx<targetIdx; ) fireEvent(events[evtIdx++]);
+  fastForward=false;
+  /* tout figer à l'état final */
+  const c=cities[0];
+  for(const p of c.tilePops) paintTile(c,p.i,p.j);
+  c.tilePops.length=0;
+  if(c.fountainAt){ paintFountain(c); c.fountainAt=null; }
+  c.dispR=Math.min(c.unlockedR,C)+0.6;
+  for(const d of c.drawList) if(d.prop && d.prop.born) d.prop.born=0;
+  replayClock = targetIdx*EVT_INTERVAL;
+  currentDate = targetIdx>0? events[targetIdx-1].date : PERIOD.from;
+  disp.count=stats.count; disp.money=stats.money; disp.dead=stats.dead;
+  ended=false;
+  document.getElementById('overlay-end').style.display='none';
 }
 
 /* ---------- Feed ---------- */
@@ -1158,12 +1259,56 @@ function flame(x,y){
     c:pick(['250,93,25','255,160,40','255,214,90'], Math.random)});
 }
 
+/* ---------- La mascotte parle ---------- */
+const bubbleEl=document.getElementById('bubble');
+const bubbleTextEl=document.getElementById('bubble-text');
+const BUBBLE_CTA_URL='https://www.laboutiquepme.com/?utm_source=transmissions&utm_medium=poc&utm_content=mascotte';
+const bubbleMsgs=[
+  ()=>({ t:"Le saviez-vous ? **700 000 entreprises** françaises vont chercher un repreneur d'ici 10 ans." }),
+  ()=>({ t:`Rien qu'ici, depuis le ${fmtDate(PERIOD.from)} : déjà **${Math.round(stats.count).toLocaleString('fr-FR')} transmissions**.` }),
+  ()=>({ t:`Et beaucoup ferment **faute de repreneur**… ${Math.round(stats.dead*LIQ_RATIO).toLocaleString('fr-FR')} liquidations — ce sont les maisons qui brûlent 🔥` }),
+  ()=>({ t:"Un projet de cession ? **Contactez La Boutique PME** →", cta:true }),
+];
+const bubble={ idx:-1, phase:'wait', t0:0, msg:null };
+bubbleEl.onclick=()=>{ if(bubble.msg&&bubble.msg.cta) window.open(BUBBLE_CTA_URL,'_blank'); };
+const mdToHtml=s=>s.replace(/\*\*(.+?)\*\*/g,'<b>$1</b>');
+const mdToPlain=s=>s.replace(/\*\*/g,'');
+function updateBubble(t){
+  if(!running||ended||bubble.phase==='done'){ bubbleEl.classList.remove('show'); return; }
+  /* ancrée au-dessus de la mascotte (tuile C+1,C de la ville) */
+  const c=cities[0];
+  const sx=cam.x+(c.cx+HW)*cam.z, sy=cam.y+(c.cy+3)*cam.z;
+  if(sx<80||sx>vw-80||sy<100||sy>vh-30){ bubbleEl.classList.remove('show'); return; }
+  bubbleEl.style.left=sx+'px'; bubbleEl.style.top=(sy-7)+'px';
+  if(bubble.phase==='wait'){
+    if(t-bubble.t0>1.4){
+      bubble.idx=(bubble.idx+1)%bubbleMsgs.length;
+      bubble.msg=bubbleMsgs[bubble.idx]();
+      bubble.phase='typing'; bubble.t0=t;
+      bubbleEl.classList.toggle('cta', !!bubble.msg.cta);
+      bubbleEl.classList.add('show');
+    }
+  } else if(bubble.phase==='typing'){
+    const plain=mdToPlain(bubble.msg.t);
+    const n=Math.min(plain.length, Math.floor((t-bubble.t0)*40));
+    bubbleTextEl.textContent=plain.slice(0,n);
+    if(n>=plain.length){ bubbleTextEl.innerHTML=mdToHtml(bubble.msg.t); bubble.phase='hold'; bubble.t0=t; }
+  } else if(bubble.phase==='hold'){
+    if(t-bubble.t0>(bubble.msg.cta?8:5.5)){
+      bubbleEl.classList.remove('show');
+      /* une seule passe : après le dernier message (CTA), il se tait */
+      bubble.phase = (bubble.idx>=bubbleMsgs.length-1)? 'done' : 'wait';
+      bubble.t0=t;
+    }
+  }
+}
+
 /* ---------- Boucle de rendu ---------- */
 let lastT=nowS();
 function frame(){
   const t=nowS(), dt=Math.min(0.05, t-lastT); lastT=t;
 
-  if(running&&!paused){
+  if(running&&!paused&&!TL.scrub){
     /* prologue : la ville existante apparaît vite */
     if(stockIdx<stock.length){
       stockTimer-=dt;
@@ -1194,7 +1339,7 @@ function frame(){
   document.getElementById('c-money').textContent = (REAL?'≥ ':'')+fmtCompact(disp.money)+' échangés';
   document.getElementById('c-dead').textContent  = Math.round(disp.dead*LIQ_RATIO).toLocaleString('fr-FR');
   /* timeline : curseur + date courante */
-  if(currentDate){
+  if(currentDate && !TL.scrub){
     const target=Math.min(1,Math.max(0,(currentDate.getTime()-TL.from)/Math.max(1,TL.to-TL.from)));
     TL.disp += (target-TL.disp)*Math.min(1,dt*3);
     TL.fill.style.width=(TL.disp*100)+'%';
@@ -1333,6 +1478,7 @@ function frame(){
   }
 
   if(exportMode) drawExportHud();
+  updateBubble(t);
   updateTooltip();
   requestAnimationFrame(frame);
 }
