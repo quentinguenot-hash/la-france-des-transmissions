@@ -1,0 +1,1443 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>La France des Transmissions — POC</title>
+<meta name="description" content="Toutes les 12 minutes, une entreprise française change de mains. Regardez.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..900;1,9..144,400..900&family=VT323&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --creme:#F4EADA;
+    --creme-2:#FBF4E7;
+    --encre:#2B2118;
+    --terracotta:#C8542E;
+    --flamme:#FA5D19;
+    --vert:#6E8B5E;
+    --or:#E0A33C;
+    --muted:#8C7A66;
+    --card-shadow: 4px 4px 0 rgba(43,33,24,.18);
+  }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  html,body{ height:100%; overflow:hidden; }
+  body{
+    background:
+      radial-gradient(1200px 700px at 70% -10%, #FBF2DF 0%, transparent 60%),
+      radial-gradient(900px 600px at 10% 110%, #EFDFC4 0%, transparent 55%),
+      var(--creme);
+    color:var(--encre);
+    font-family:'Outfit', sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  body::after{ /* grain */
+    content:""; position:fixed; inset:0; pointer-events:none; z-index:40; opacity:.05; mix-blend-mode:multiply;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+  #city{ position:fixed; inset:0; display:block; cursor:grab; }
+  #city.dragging{ cursor:grabbing; }
+
+  /* ---------- Cards HUD — DA « bulletin officiel chaleureux » ---------- */
+  .card{
+    background:
+      linear-gradient(180deg, rgba(255,255,255,.5), rgba(255,255,255,0) 26%),
+      var(--creme-2);
+    border:1.5px solid var(--encre);
+    border-radius:14px;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.65),
+      4px 5px 0 rgba(43,33,24,.13),
+      0 16px 34px rgba(43,33,24,.10);
+  }
+  .hud{ position:fixed; z-index:20; }
+
+  /* Title */
+  #hud-title{ top:18px; left:18px; padding:13px 18px 12px; max-width:348px; }
+  .eyebrow{
+    display:flex; align-items:center; gap:8px;
+    font-size:9px; font-weight:700; letter-spacing:.26em; text-transform:uppercase;
+    color:var(--muted); margin-bottom:7px; white-space:nowrap;
+  }
+  .eyebrow::before, .eyebrow::after{ content:""; height:1px; background:currentColor; flex:1; opacity:.4; }
+  #hud-title h1{
+    font-family:'Fraunces', serif; font-weight:900; font-style:italic;
+    font-size:25px; line-height:1.0; letter-spacing:-.02em; color:var(--terracotta);
+    text-transform:uppercase;
+  }
+  #hud-title h1 span{ color:var(--encre); }
+  #hud-title p{ margin-top:7px; font-size:12.5px; line-height:1.45; color:var(--muted); font-weight:500; }
+  #hud-title p strong{ color:var(--encre); }
+  .poc-tag{
+    display:inline-flex; align-items:center; gap:6px; margin-top:9px;
+    font-family:'VT323', monospace; font-size:13px; letter-spacing:.08em;
+    background:var(--encre); color:var(--creme); padding:2px 9px 1px; border-radius:99px;
+  }
+  .poc-tag.live::before{
+    content:""; width:6px; height:6px; border-radius:50%; background:#8FD07C;
+    animation:pulse 1.8s ease-in-out infinite;
+  }
+  @keyframes pulse{ 0%,100%{ opacity:1; transform:scale(1);} 50%{ opacity:.35; transform:scale(.75);} }
+
+  /* Timeline — le temps qui passe */
+  #hud-timeline{
+    top:18px; left:50%; transform:translateX(-50%);
+    width:min(480px,44vw); padding:10px 18px 11px; text-align:center;
+  }
+  .tl-date{
+    font-family:'VT323', monospace; font-size:24px; line-height:1; color:var(--encre);
+    letter-spacing:.02em; margin-bottom:8px;
+  }
+  .tl-date b{ color:var(--terracotta); font-weight:400; }
+  .tl-track{
+    position:relative; height:7px; border-radius:99px;
+    background:#E6D8BC; box-shadow:inset 0 1px 2px rgba(43,33,24,.25);
+  }
+  .tl-tick{
+    position:absolute; top:-3px; width:1px; height:13px;
+    background:rgba(43,33,24,.22);
+  }
+  .tl-tick.pub{ background:rgba(200,84,46,.45); width:2px; }
+  .tl-fill{
+    position:absolute; left:0; top:0; bottom:0; width:0%;
+    background:linear-gradient(90deg,var(--terracotta),var(--flamme));
+    border-radius:99px;
+  }
+  .tl-cursor{
+    position:absolute; top:50%; left:0%;
+    width:13px; height:13px; transform:translate(-50%,-50%);
+    background:var(--encre); border:2px solid var(--creme-2); border-radius:50%;
+    box-shadow:0 0 0 1.5px var(--encre), 0 2px 6px rgba(43,33,24,.4);
+  }
+  .tl-bounds{
+    display:flex; justify-content:space-between; margin-top:6px;
+    font-size:9.5px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--muted);
+  }
+
+  /* Counter — tableau d'affichage */
+  #hud-counter{
+    top:18px; right:18px; padding:13px 17px 12px; min-width:256px; text-align:right;
+    background:linear-gradient(180deg,#332718,#251C11 70%);
+    border:1.5px solid #18110A; border-radius:14px;
+    box-shadow:
+      inset 0 1px 0 rgba(255,244,220,.09),
+      4px 5px 0 rgba(43,33,24,.22),
+      0 18px 38px rgba(43,33,24,.22);
+  }
+  #hud-counter .label{ font-size:10px; font-weight:700; letter-spacing:.2em; text-transform:uppercase; color:#A38C6C; }
+  #hud-counter .big{
+    font-family:'VT323', monospace; font-size:44px; line-height:.95; color:#FBF4E7; margin-top:3px;
+    text-shadow:0 0 14px rgba(250,93,25,.3);
+  }
+  #hud-counter .big small{ font-size:18px; color:#A38C6C; }
+  #hud-counter .money{ font-family:'VT323', monospace; font-size:23px; color:#FFB36B; margin-top:1px; }
+  #hud-counter .dead{ font-size:11.5px; color:#B5A186; margin-top:5px; }
+  #hud-counter .dead b{ color:#FF8E5E; font-family:'VT323', monospace; font-size:15px; }
+  #hud-counter .date{ font-family:'VT323', monospace; font-size:15px; color:#8C7A66; margin-top:7px; border-top:1px dashed #4A3B2C; padding-top:6px; }
+  #hud-counter a.cta{
+    display:block; margin-top:9px; font-size:12px; font-weight:700; color:#FFD9C4;
+    background:rgba(250,93,25,.16); border:1px solid rgba(250,93,25,.45);
+    border-radius:9px; padding:7px 10px; text-decoration:none; transition:all .15s;
+  }
+  #hud-counter a.cta:hover{ background:rgba(250,93,25,.3); color:#fff; transform:translateY(-1px); }
+
+  /* Feed — dépêches */
+  #hud-feed{ bottom:86px; left:18px; width:336px; display:flex; flex-direction:column-reverse; gap:7px; pointer-events:none; }
+  .feed-item{
+    background:var(--creme-2);
+    border:1px solid rgba(43,33,24,.4);
+    border-left:4px solid var(--terracotta);
+    border-radius:10px;
+    box-shadow:2px 3px 0 rgba(43,33,24,.10), 0 10px 22px rgba(43,33,24,.08);
+    padding:7px 12px 7px 9px; font-size:12.5px; line-height:1.35;
+    display:flex; gap:9px; align-items:center;
+    animation:feedIn .4s cubic-bezier(.2,1.4,.4,1) both;
+  }
+  .feed-item .ico{
+    display:grid; place-items:center; flex:none;
+    width:26px; height:26px; font-size:13px;
+    background:#F1E6D0; border:1px solid rgba(43,33,24,.3); border-radius:50%;
+  }
+  .feed-item .prix{ font-family:'VT323', monospace; font-size:15px; color:var(--terracotta); white-space:nowrap; }
+  .feed-item.neg{ background:#F2E3D9; color:#6B4A3C; }
+  .feed-item.neg .ico{ background:#EBD3C4; }
+  .feed-item.neg .prix{ color:#8C6A5A; }
+  .feed-item b{ font-weight:700; color:var(--encre); }
+  .feed-item.neg b{ color:#5E3A2C; }
+  @keyframes feedIn{ from{ transform:translateX(-22px) scale(.96); opacity:0; } to{ transform:none; opacity:1; } }
+
+  /* Filters */
+  #hud-filters{
+    bottom:18px; left:50%; transform:translateX(-50%); display:flex; gap:6px; padding:7px 9px;
+    max-width:min(92vw,860px); overflow-x:auto; scrollbar-width:none;
+    background:rgba(251,244,231,.88); backdrop-filter:blur(8px);
+  }
+  #hud-filters::-webkit-scrollbar{ display:none; }
+  .chip{
+    display:inline-flex; align-items:center; gap:6px;
+    font-family:'Outfit'; font-size:12px; font-weight:600; white-space:nowrap;
+    border:1.5px solid var(--encre); background:var(--creme-2); color:var(--encre);
+    border-radius:99px; padding:4px 12px; cursor:pointer;
+    box-shadow:2px 2px 0 rgba(43,33,24,.12);
+    transition:all .12s;
+  }
+  .chip .dot{ width:8px; height:8px; border-radius:2px; flex:none; box-shadow:inset 0 -1px 0 rgba(0,0,0,.25); }
+  .chip:hover{ transform:translateY(-1px); box-shadow:2px 3px 0 rgba(43,33,24,.18); }
+  .chip.on{ background:var(--encre); color:var(--creme); }
+  .chip.on .dot{ outline:1px solid rgba(244,234,218,.5); }
+
+  /* Controls — barre encre */
+  #hud-controls{
+    bottom:18px; right:18px; display:flex; gap:5px; padding:7px; align-items:center;
+    background:linear-gradient(180deg,#332718,#251C11 70%);
+    border:1.5px solid #18110A; border-radius:14px;
+    box-shadow:inset 0 1px 0 rgba(255,244,220,.09), 4px 5px 0 rgba(43,33,24,.22), 0 14px 30px rgba(43,33,24,.2);
+  }
+  .btn{
+    font-family:'VT323', monospace; font-size:18px; line-height:1;
+    border:1.5px solid rgba(244,234,218,.28); background:transparent; color:var(--creme);
+    border-radius:9px; min-width:38px; height:34px; padding:0 9px; cursor:pointer;
+    transition:all .1s;
+  }
+  .btn:hover{ border-color:rgba(244,234,218,.65); }
+  .btn:active{ transform:translateY(1px); }
+  .btn.on{ background:var(--flamme); border-color:var(--flamme); color:#fff; }
+  .btn.rec{ background:#C0362B; border-color:#C0362B; color:#fff; animation:recblink 1.2s ease-in-out infinite; }
+  @keyframes recblink{ 50%{ box-shadow:0 0 0 5px rgba(250,93,25,.22); } }
+
+  /* Tooltip */
+  #tooltip{
+    position:fixed; z-index:30; pointer-events:none; display:none;
+    background:linear-gradient(180deg,#332718,#251C11 70%); color:var(--creme);
+    border:1px solid #18110A; border-left:3px solid var(--flamme); border-radius:11px;
+    padding:10px 13px; font-size:12px; line-height:1.45; max-width:260px;
+    box-shadow:5px 6px 0 rgba(43,33,24,.2), 0 16px 34px rgba(43,33,24,.25);
+  }
+  #tooltip .t-name{ font-family:'Fraunces', serif; font-weight:700; font-size:14px; font-style:italic; }
+  #tooltip .t-prix{ font-family:'VT323', monospace; font-size:17px; color:#FFB68C; }
+  #tooltip .t-meta{ color:#C9B79E; font-size:11px; margin-top:2px; }
+  #tooltip.dead .t-prix{ color:#B89D9D; }
+
+  /* Overlays (intro / fin) */
+  .overlay{
+    position:fixed; inset:0; z-index:50; display:flex; align-items:center; justify-content:center;
+    background:
+      radial-gradient(120% 90% at 50% 40%, rgba(244,234,218,.55) 0%, rgba(236,221,196,.92) 100%);
+    backdrop-filter:blur(6px);
+  }
+  .overlay .panel{ text-align:center; max-width:580px; padding:34px 44px 32px; margin:0 16px; }
+  .ornament{
+    display:flex; align-items:center; gap:12px; justify-content:center;
+    font-size:10px; font-weight:700; letter-spacing:.32em; text-transform:uppercase;
+    color:var(--terracotta); margin-bottom:16px;
+  }
+  .ornament::before, .ornament::after{ content:""; height:1.5px; background:currentColor; width:56px; opacity:.45; }
+  .overlay h2{
+    font-family:'Fraunces', serif; font-weight:900; font-style:italic; letter-spacing:-.02em;
+    font-size:clamp(26px,4.4vw,40px); line-height:1.05; color:var(--encre);
+  }
+  .overlay h2 em{ color:var(--terracotta); font-style:italic; }
+  .overlay p.sub{ margin-top:14px; font-size:15px; color:var(--muted); line-height:1.5; }
+  .overlay .stats{ font-family:'VT323', monospace; font-size:22px; color:var(--terracotta); margin-top:12px; line-height:1.4; }
+  .big-btn{
+    margin-top:24px; font-family:'Outfit'; font-weight:700; font-size:16px;
+    background:var(--flamme); color:#fff; border:2px solid var(--encre);
+    border-radius:99px; padding:13px 30px; cursor:pointer;
+    box-shadow:4px 4px 0 var(--encre); transition:transform .1s;
+  }
+  .big-btn:hover{ transform:translate(-1px,-1px); box-shadow:5px 5px 0 var(--encre); }
+  .big-btn:active{ transform:translate(3px,3px); box-shadow:1px 1px 0 var(--encre); }
+  .overlay .note{ margin-top:16px; font-family:'VT323', monospace; font-size:14px; color:var(--muted); }
+  #overlay-end{ display:none; }
+
+  @media (max-width:760px){
+    #hud-timeline{ top:auto; bottom:108px; width:90vw; padding:7px 12px 8px; }
+    .tl-date{ font-size:17px; margin-bottom:6px; }
+    .tl-bounds{ display:none; }
+    #hud-feed{ display:none; }
+    #hud-title{ max-width:235px; padding:10px 12px; } #hud-title h1{ font-size:17px; }
+    #hud-title p{ display:none; }
+    #hud-counter{ min-width:0; padding:9px 12px 8px; } #hud-counter .big{ font-size:30px; }
+    #hud-feed{ width:255px; bottom:120px; } .feed-item{ font-size:11px; }
+    #hud-filters{ bottom:62px; max-width:94vw; }
+    #hud-controls{ bottom:12px; right:12px; }
+  }
+</style>
+</head>
+<body>
+
+<canvas id="city"></canvas>
+
+<!-- HUD -->
+<div class="hud card" id="hud-title">
+  <div class="eyebrow">Bulletin des transmissions</div>
+  <h1>La France <span>des</span> Transmissions</h1>
+  <p>Toutes les <strong id="t-cadence">12 minutes</strong>, une entreprise française change de mains. Chaque bâtiment qui se construit est une cession réelle publiée au BODACC.</p>
+  <span class="poc-tag" id="poc-tag">POC · DONNÉES FICTIVES</span>
+</div>
+
+<div class="hud card" id="hud-timeline">
+  <div class="tl-date" id="tl-date">—</div>
+  <div class="tl-track" id="tl-track">
+    <div class="tl-fill" id="tl-fill"></div>
+    <div class="tl-cursor" id="tl-cursor"></div>
+  </div>
+  <div class="tl-bounds"><span id="tl-from"></span><span id="tl-to"></span></div>
+</div>
+
+<div class="hud card" id="hud-counter">
+  <div class="label" id="c-since">Depuis le 12 mai 2026</div>
+  <div class="big"><span id="c-count">0</span> <small>transmissions publiées</small></div>
+  <div class="money" id="c-money">0 €</div>
+  <div class="dead" id="c-dead-line"><b id="c-dead">0</b> liquidations judiciaires</div>
+  <a class="cta" href="https://www.laboutiquepme.com/?utm_source=transmissions&utm_medium=poc" target="_blank" rel="noopener">Faites-vous accompagner pour vendre votre société →</a>
+</div>
+
+<div class="hud" id="hud-feed"></div>
+
+<div class="hud card" id="hud-filters"></div>
+
+<div class="hud card" id="hud-controls">
+  <button class="btn" id="b-pause" title="Pause / lecture">⏸</button>
+  <button class="btn on" id="b-x1" data-speed="1">×1</button>
+  <button class="btn" id="b-x2" data-speed="2">×2</button>
+  <button class="btn" id="b-x4" data-speed="4">×4</button>
+  <button class="btn on" id="b-fit" title="Cadrage automatique">⛶</button>
+  <button class="btn" id="b-rec" title="Exporter le replay en vidéo">⏺</button>
+  <button class="btn" id="b-sound" title="Son">♪</button>
+</div>
+
+<div id="tooltip"></div>
+
+<!-- Intro -->
+<div class="overlay" id="overlay-intro">
+  <div class="panel card">
+    <div class="ornament">Le BODACC, en direct</div>
+    <h2>Toutes les <em id="i-cadence">12 minutes</em>, une entreprise française change de mains.</h2>
+    <p class="sub" id="i-sub">700 000 entreprises à transmettre d'ici 10 ans. Voici à quoi ressemble la vague — un mois de cessions, rejoué en 3 minutes.</p>
+    <button class="big-btn" id="b-start">▶&nbsp;&nbsp;Regardez</button>
+    <div style="margin-top:13px">
+      <a href="#" id="b-start-rec" style="font-size:12.5px;font-weight:700;color:var(--terracotta);text-decoration:none;border-bottom:1px dashed currentColor;">⏺&nbsp;Lancer en enregistrant la vidéo</a>
+    </div>
+    <div class="note" id="i-note">POC — données fictives (flux BODACC simulé) · son activé, ♪ pour couper</div>
+  </div>
+</div>
+
+<!-- Fin -->
+<div class="overlay" id="overlay-end">
+  <div class="panel card">
+    <div class="ornament">Fin du replay</div>
+    <h2 id="end-title">Un mois. <em>Une ville entière.</em></h2>
+    <div class="stats" id="end-stats"></div>
+    <p class="sub">Et ce n'est que le début : la vague des départs en retraite ne fait que commencer.</p>
+    <button class="big-btn" id="b-replay">↻&nbsp;&nbsp;Rejouer</button>
+    <div class="note"><a href="https://www.laboutiquepme.com/?utm_source=transmissions&utm_medium=poc" target="_blank" rel="noopener" style="color:var(--terracotta);font-family:Outfit;font-weight:700;text-decoration:none;">Faites-vous accompagner pour vendre votre société →</a></div>
+  </div>
+</div>
+
+<script src="data.js"></script>
+<script>
+'use strict';
+/* =====================================================================
+   LA FRANCE DES TRANSMISSIONS — POC v0
+   Ville isométrique pixel-art procédurale, Canvas 2D, zéro dépendance.
+   Données : data.js (export BODACC réel via fetch-bodacc.mjs) si présent,
+   sinon fallback sur un dataset fictif généré.
+   ===================================================================== */
+
+/* ---------- RNG seedé (replay déterministe) ---------- */
+function mulberry32(a){ return function(){ a|=0; a=a+0x6D2B79F5|0; let t=Math.imul(a^a>>>15,1|a); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
+const R = mulberry32(20260611);
+const pick = (arr, rnd=R) => arr[Math.floor(rnd()*arr.length)];
+
+/* ---------- Palette utilitaire ---------- */
+function shade(hex, amt){
+  const n = parseInt(hex.slice(1),16);
+  let r=(n>>16)+amt, g=((n>>8)&255)+amt, b=(n&255)+amt;
+  r=Math.max(0,Math.min(255,r)); g=Math.max(0,Math.min(255,g)); b=Math.max(0,Math.min(255,b));
+  return '#'+((r<<16)|(g<<8)|b).toString(16).padStart(6,'0');
+}
+
+/* ---------- Secteurs (8 familles NAF regroupées) ---------- */
+const SECTORS = [
+  { id:'bouche',    label:'Commerces de bouche', icon:'🥖', verb:'a trouvé un repreneur',
+    walls:['#EFE0C3','#E8D5B0','#F0E2CC'], awning:'#C8542E', roof:'pitched', roofC:'#B5552F',
+    names:['Boulangerie du Marché','Pâtisserie Augustine','Boucherie Lambert','Fromagerie des Halles','Boulangerie Saint-Jean','Maison Dupré — Traiteur','Poissonnerie de la Criée','Chocolaterie Renard','Boulangerie Moderne','Charcuterie du Centre','Pâtisserie de la Gare','Maison Bertrand'] },
+  { id:'resto',     label:'Cafés & restaurants', icon:'🍷', verb:'a trouvé un repreneur',
+    walls:['#E9D9BC','#E3CFAE','#EFE3C8'], awning:'#8C2F22', roof:'pitched', roofC:'#A04A2C',
+    names:['Le Bistrot d’Émile','Café de la Place','Le Petit Zinc','Hôtel-Restaurant du Lion d’Or','Brasserie des Arcades','Le Relais des Vignes','Crêperie de l’Église','Le Comptoir 1908','Auberge du Pont Vieux','La Table de Marius','Pizzeria San Remo','Café des Sports'] },
+  { id:'commerce',  label:'Commerces de détail', icon:'🛍️', verb:'a trouvé un repreneur',
+    walls:['#EBDCC0','#E5D2AF','#F1E5CB'], awning:'#6E8B5E', roof:'pitched', roofC:'#B5552F',
+    names:['Librairie des Remparts','Fleuriste Aux Quatre Saisons','Optique Centrale','Tabac-Presse du Rond-Point','Mercerie Lejeune','Droguerie Moderne','Bijouterie Collin','Magasin Vert & Jardin','Chaussures Pellet','Maison de la Presse','Quincaillerie Bonnet','Parfumerie Iris'] },
+  { id:'auto',      label:'Garages & auto', icon:'🔧', verb:'a trouvé un repreneur',
+    walls:['#CFC6B4','#C6BCA8','#D7CDBB'], awning:'#3E5C76', roof:'flat', roofC:'#8A8273',
+    names:['Garage Martin & Fils','Carrosserie de l’Étoile','Garage du Viaduc','Auto-École Conduite Plus','Pneus Service 2000','Garage Bellecour','Mécanique Générale Roux','Station du Carrefour','Garage des Tilleuls','Contrôle Technique Express'] },
+  { id:'artisanat', label:'BTP & artisanat', icon:'🔨', verb:'a trouvé un repreneur',
+    walls:['#E2C9A0','#D9BD90','#E8D2AC'], awning:'#A8763E', roof:'pitched', roofC:'#9C6B3C',
+    names:['Menuiserie Vasseur','Plomberie Chauffage Gilbert','Électricité Générale Morel','Maçonnerie Da Silva','Couverture Zinguerie Brun','Peinture Décor Leroy','Serrurerie du Faubourg','Charpentes de l’Ouest','Carrelage Antunes','Ébénisterie Royale'] },
+  { id:'industrie', label:'Industrie', icon:'🏭', verb:'a trouvé un repreneur',
+    walls:['#C49A86','#BA8E78','#CCA28E'], awning:'#7A4A3A', roof:'flat', roofC:'#9A6B58',
+    names:['Mécanique de Précision Aubert','Fonderie du Forez','Atelier Textile Charvet','Plastiques de l’Ain SARL','Imprimerie Nouvelle','Métallerie Industrielle Vives','Scierie des Vosges','Conserverie Maritime Le Goff','Usinage Rhodanien','Emballages Cartonnerie Sud'] },
+  { id:'services',  label:'Services & bureaux', icon:'💼', verb:'a trouvé un repreneur',
+    walls:['#C7CCD1','#BCC4CC','#D2D6DA'], awning:'#3E5C76', roof:'flat', roofC:'#5E6B78',
+    names:['Cabinet Comptable Fabre','Agence Immobilière du Parc','Assurances Picard & Associés','Études & Conseil Atlantique','Agence Web Pixelle','Cabinet d’Architectes Lenoir','Société de Nettoyage Éclat','Transports Express Bressan','Sécurité Gardiennage Vigie','Formation Pro Compétences'] },
+  { id:'sante',     label:'Santé & soins', icon:'⚕️', verb:'a trouvé un repreneur',
+    walls:['#EFEadc'.toUpperCase(),'#EAE2CE','#F3EDDD'], awning:'#3E7D5E', roof:'pitched', roofC:'#7A8C6E',
+    names:['Pharmacie de la Mairie','Cabinet Dentaire Sourire','Laboratoire d’Analyses Centre','Optique Médicale Clairvue','Pharmacie du Soleil','Cabinet Infirmier des Lilas','Orthopédie Confort Plus','Pharmacie de l’Europe'] },
+];
+
+const CITIES = [
+  ['Lyon','69'],['Marseille','13'],['Toulouse','31'],['Bordeaux','33'],['Nantes','44'],['Lille','59'],
+  ['Strasbourg','67'],['Rennes','35'],['Dijon','21'],['Angers','49'],['Clermont-Ferrand','63'],['Tours','37'],
+  ['Limoges','87'],['Besançon','25'],['Metz','57'],['Perpignan','66'],['Orléans','45'],['Rouen','76'],
+  ['Pau','64'],['La Rochelle','17'],['Annecy','74'],['Brest','29'],['Valence','26'],['Quimper','29'],
+  ['Albi','81'],['Auxerre','89'],['Niort','79'],['Vannes','56'],['Colmar','68'],['Bayonne','64'],
+  ['Chartres','28'],['Mâcon','71'],['Arras','62'],['Agen','47'],['Aurillac','15'],['Vichy','03'],
+  ['Saint-Étienne','42'],['Le Mans','72'],['Troyes','10'],['Béziers','34'],['Lorient','56'],['Charleville-Mézières','08'],
+  ['Cahors','46'],['Épinal','88'],['Périgueux','24'],['Saint-Brieuc','22'],['Montauban','82'],['Nevers','58'],
+];
+
+/* ---------- Paliers de prix (taille du bâtiment) ---------- */
+const TIERS = [
+  { max:100000,    label:'< 100 k€' },
+  { max:500000,    label:'100–500 k€' },
+  { max:2000000,   label:'500 k€–2 M€' },
+  { max:10000000,  label:'2–10 M€' },
+  { max:Infinity,  label:'> 10 M€' },
+];
+function randPrice(tier){
+  const lo=[18,100,500,2000,10000][tier], hi=[95,480,1900,9500,28000][tier];
+  const v=(lo+R()*(hi-lo))*1000;
+  const step=[1,5,10,50,250][tier]*1000;
+  return Math.round(v/step)*step;
+}
+const fmtEUR = new Intl.NumberFormat('fr-FR',{style:'currency',currency:'EUR',maximumFractionDigits:0});
+function fmtCompact(v){
+  if(v>=1e9) return (v/1e9).toLocaleString('fr-FR',{maximumFractionDigits:2})+' Md€';
+  if(v>=1e6) return (v/1e6).toLocaleString('fr-FR',{maximumFractionDigits:1})+' M€';
+  return Math.round(v/1000).toLocaleString('fr-FR')+' k€';
+}
+const fmtDate = d => d.toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'});
+
+/* ---------- Dataset : BODACC réel (data.js) ou fallback fictif ---------- */
+const REAL = window.BODACC_DATA || null;
+let stock, events, PERIOD, CADENCE = 12;
+if(REAL){
+  const toCo = r => ({ sector:r.sector, tier:r.tier, name:r.name, city:r.city, dept:r.dept,
+                       price:r.price, priceKnown:r.priceKnown, variant:r.variant, activity:r.activity });
+  const cs = REAL.cessions;
+  const nStock = Math.min(70, Math.max(0, cs.length-300));
+  stock = cs.slice(0,nStock).map(toCo);
+  /* tri par jour de parution + jitter déterministe pour interlacer
+     cessions et liquidations à l'intérieur d'une même journée */
+  const jit = s => { let h=0; for(const c of s) h=(h*31+c.charCodeAt(0))|0; return (h>>>0)/4294967296; };
+  events = cs.slice(nStock).map(r=>({ kind:'cession', co:toCo(r), date:new Date(r.date) }))
+    .concat(REAL.liquidations.map(r=>({ kind:'liquidation', co:toCo(r), date:new Date(r.date) })))
+    .sort((a,b)=>(a.date-b.date) || (jit(a.co.name+a.kind)-jit(b.co.name+b.kind)));
+  PERIOD = { from:new Date(REAL.period.from), to:new Date(REAL.period.to), days:REAL.period.days };
+  CADENCE = REAL.cadenceMinutes;
+} else {
+  const STOCK_N = 70, CESSIONS_N = 300, LIQUID_N = 34;
+  const T0 = new Date(2026,4,12).getTime(), T1 = new Date(2026,5,10).getTime();
+  const SECTOR_W = [0.17,0.18,0.14,0.10,0.13,0.07,0.13,0.08];
+  const pickSector=()=>{ let r=R(),acc=0; for(let i=0;i<SECTOR_W.length;i++){acc+=SECTOR_W[i]; if(r<acc) return i;} return 0; };
+  const pickTier=()=>{ const w=[0.34,0.36,0.20,0.08,0.02]; let r=R(),acc=0; for(let i=0;i<w.length;i++){acc+=w[i]; if(r<acc) return i;} return 0; };
+  const makeCompany=()=>{
+    const s=pickSector(), t=pickTier(), c=pick(CITIES);
+    return { sector:s, tier:t, name:pick(SECTORS[s].names), city:c[0], dept:c[1],
+             price:randPrice(t), priceKnown:R()<0.74, variant:Math.floor(R()*4) };
+  };
+  stock = Array.from({length:STOCK_N}, makeCompany);
+  events = [];
+  for(let i=0;i<CESSIONS_N;i++) events.push({ kind:'cession', co:makeCompany() });
+  for(let i=0;i<LIQUID_N;i++)  events.push({ kind:'liquidation' });
+  /* mélange + dates croissantes */
+  for(let i=events.length-1;i>0;i--){ const j=Math.floor(R()*(i+1)); [events[i],events[j]]=[events[j],events[i]]; }
+  events.forEach((e,i)=>{ e.date = new Date(T0 + (T1-T0)*(i/(events.length-1))); });
+  PERIOD = { from:new Date(T0), to:new Date(T1), days:30 };
+}
+
+/* ---------- Chiffres honnêtes ----------
+   L'animation ne représente qu'un échantillon de liquidations ; le chiffre
+   affiché est le total RÉEL de jugements d'ouverture de LJ sur la période. */
+const LIQ_TOTAL = REAL? (REAL.stats.liquidationsTotal || REAL.liquidations.length) : null;
+const LIQ_RATIO = (REAL && REAL.liquidations.length)? Math.max(1, (LIQ_TOTAL||0)/REAL.liquidations.length) : 1;
+
+/* ---------- Libellés dynamiques ---------- */
+{
+  const cad = CADENCE+' minutes';
+  document.getElementById('t-cadence').textContent = cad;
+  document.getElementById('i-cadence').textContent = cad;
+  document.getElementById('c-since').textContent = 'Depuis le '+fmtDate(PERIOD.from);
+  if(REAL){
+    document.getElementById('poc-tag').textContent = 'DONNÉES RÉELLES BODACC';
+    document.getElementById('poc-tag').classList.add('live');
+    document.getElementById('c-dead-line').title =
+      `Total réel de la période — chaque incendie à l'écran en représente ~${Math.round(LIQ_RATIO)}`;
+    document.getElementById('c-money').title =
+      `Somme des prix publiés (${REAL.stats.priceRate} % des annonces) — le total réel est supérieur`;
+    document.getElementById('i-sub').textContent =
+      `700 000 entreprises à transmettre d'ici 10 ans. Voici la vague, en vrai : ${REAL.stats.cessions.toLocaleString('fr-FR')} cessions publiées au BODACC du ${fmtDate(PERIOD.from)} au ${fmtDate(PERIOD.to)}, rejouées en accéléré. Regardez la ville s'étendre — et certaines maisons brûler.`;
+    document.getElementById('i-note').textContent =
+      `Données réelles — BODACC open data (DILA), ${PERIOD.days} jour${PERIOD.days>1?'s':''} de parutions · son activé, ♪ pour couper`;
+    const d = PERIOD.days;
+    document.getElementById('end-title').innerHTML =
+      (d<=1? 'Une journée.' : d+' jours.')+' <em>Une ville entière.</em>';
+  }
+}
+
+/* ---------- Timeline (le temps qui passe) ---------- */
+const fmtDateLong = d => d.toLocaleDateString('fr-FR',{weekday:'long', day:'numeric', month:'long'});
+const TL = {
+  from: PERIOD.from.getTime(), to: PERIOD.to.getTime(), disp: 0,
+  date: document.getElementById('tl-date'),
+  fill: document.getElementById('tl-fill'),
+  cursor: document.getElementById('tl-cursor'),
+};
+{
+  const dayShort = d => d.toLocaleDateString('fr-FR',{day:'numeric',month:'short'});
+  document.getElementById('tl-from').textContent = dayShort(PERIOD.from);
+  document.getElementById('tl-to').textContent   = dayShort(PERIOD.to);
+  const track=document.getElementById('tl-track');
+  const days = Math.max(1, Math.round((TL.to-TL.from)/86400e3));
+  const pubDays = new Set(events.map(e=>new Date(e.date).setHours(0,0,0,0)));
+  for(let k=0;k<=days;k++){
+    const tick=document.createElement('div');
+    tick.className='tl-tick'+(pubDays.has(new Date(TL.from+k*86400e3).setHours(0,0,0,0))?' pub':'');
+    tick.style.left=(k/days*100)+'%';
+    track.appendChild(tick);
+  }
+  TL.date.textContent = fmtDateLong(PERIOD.from);
+}
+
+/* ---------- Grille isométrique — une seule grande ville extensible ----------
+   Place + parc au centre, anneaux de terrain qui se déverrouillent au fur et à
+   mesure des constructions : la ville s'étend encore et encore, boulevard
+   après boulevard. */
+const HW=16, HH=8;                              // tuile 32×16
+const N=71, C=35, R_MAX=35;                     // ~3 500 parcelles constructibles
+const ringOf=(i,j)=>Math.max(Math.abs(i-C),Math.abs(j-C));
+const ringRoad=v=>v>=4&&(v-4)%5===0;            // boulevards concentriques tous les 5 anneaux
+const isRoad=(i,j)=>{
+  const ai=Math.abs(i-C), aj=Math.abs(j-C);
+  return (ringRoad(ai)&&aj<=ai)||(ringRoad(aj)&&ai<=aj)
+      || (i===C&&aj>4)||(j===C&&ai>4);          // avenues rayonnantes
+};
+const inPlaza=(i,j)=>ringOf(i,j)<=1;
+const inPark =(i,j)=>ringOf(i,j)<=3;
+
+/* cellules constructibles, triées du centre vers l'extérieur.
+   Quartiers angulaires PROPORTIONNELS au poids réel de chaque secteur dans les
+   données : un secteur qui pèse 35 % du flux reçoit 35 % du camembert — la
+   ville grandit ronde et équilibrée. */
+const SECTOR_CELLS = Array.from({length:8},()=>[]);
+const ALL_CELLS = [];
+{
+  const counts=new Array(8).fill(0.5);
+  stock.forEach(c=>counts[c.sector]++);
+  events.forEach(e=>{ if(e.kind==='cession') counts[e.co.sector]++; });
+  const total=counts.reduce((a,b)=>a+b,0);
+  const bounds=[]; let acc=0;
+  for(let s=0;s<8;s++){ acc+=counts[s]/total; bounds.push(acc); }
+  const sliceOf=a01=>{ for(let s=0;s<8;s++) if(a01<=bounds[s]) return s; return 7; };
+  const jr = mulberry32(424242);
+  const all=[];
+  for(let i=0;i<N;i++) for(let j=0;j<N;j++){
+    if(isRoad(i,j)||inPark(i,j)||ringOf(i,j)>R_MAX) continue;
+    const a01=(Math.atan2(j-C,i-C)+Math.PI)/(2*Math.PI);
+    all.push([i,j,Math.hypot(i-C,j-C)+jr()*0.9,sliceOf(Math.min(0.9999,a01))]);
+  }
+  all.sort((p,q)=>p[2]-q[2]);
+  for(const [i,j,_,w] of all){ SECTOR_CELLS[w].push([i,j]); ALL_CELLS.push([i,j]); }
+}
+
+const GW=2*N*HW, GH=2*N*HH+24;                  // canvas de sol
+const cities=[];                                // une seule ville désormais
+
+function paintTile(c,i,j){
+  const g=c.gctx, x=(i-j)*HW+GW/2, y=(i+j)*HH;
+  const rnd=mulberry32((i*73+j*1009+c.idx*5779)|0);
+  let col;
+  if(inPlaza(i,j)) col=(i+j)%2?'#E0D2B4':'#D8C9A8';
+  else if(isRoad(i,j)) col=(i+j)%2?'#CBBA97':'#C4B28E';
+  else if(inPark(i,j)) col=rnd()<0.5?'#9DBE7A':'#94B673';
+  else col=rnd()<0.5?'#A8C186':'#9FB97E';
+  g.fillStyle=col;
+  g.beginPath(); g.moveTo(x,y); g.lineTo(x+HW,y+HH); g.lineTo(x,y+2*HH); g.lineTo(x-HW,y+HH); g.closePath(); g.fill();
+  if(isRoad(i,j)){                                        // pavés / gravillons
+    g.fillStyle='rgba(255,250,235,.4)';
+    if(rnd()<0.6) g.fillRect(x+Math.floor((rnd()-0.5)*16), y+HH+Math.floor((rnd()-0.5)*6), 1,1);
+    g.fillStyle='rgba(90,70,50,.18)';
+    if(rnd()<0.4) g.fillRect(x+Math.floor((rnd()-0.5)*16), y+HH+Math.floor((rnd()-0.5)*6), 2,1);
+  } else if(!inPlaza(i,j)&&rnd()<0.12){                   // fleurs / herbes
+    g.fillStyle=pick(['#E8B4C8','#F2D06B','#FBF4E7'],rnd);
+    g.fillRect(x+Math.floor((rnd()-0.5)*14), y+HH+Math.floor((rnd()-0.5)*5), 2,2);
+  }
+}
+function paintFountain(c){
+  /* fontaine sur le parvis sud, devant l'hôtel de ville */
+  const g=c.gctx, fx=GW/2, fy=(2*C+4)*HH+HH;
+  g.fillStyle='#B9A988'; g.beginPath(); g.ellipse(fx,fy,12,6,0,0,7); g.fill();
+  g.fillStyle='#7FA8C9'; g.beginPath(); g.ellipse(fx,fy,8,4,0,0,7); g.fill();
+  g.fillStyle='#A9C9E2'; g.beginPath(); g.ellipse(fx-2,fy-1,3,1.5,0,0,7); g.fill();
+  g.fillStyle='#C9B79E'; g.fillRect(fx-1,fy-8,3,7);
+  g.fillStyle='#7FA8C9'; g.fillRect(fx-1,fy-9,3,2);
+}
+function addProp(c,prop){
+  c.drawList.push({prop, depth:prop.i+prop.j});
+  c.drawList.sort((a,z)=>a.depth-z.depth);
+}
+function unlockTo(c,R){
+  R=Math.min(R,C);
+  while(c.unlockedR<R){
+    c.unlockedR++;
+    const r=c.unlockedR;
+    for(let i=C-r;i<=C+r;i++) for(let j=C-r;j<=C+r;j++){
+      if(ringOf(i,j)!==r) continue;
+      if(i<0||j<0||i>=N||j>=N) continue;
+      c.tilePops.push({i,j,at:nowS()+Math.random()*0.5});
+      if(!isRoad(i,j)&&!inPark(i,j)&&!c.occupied[i][j]&&Math.random()<0.06){
+        c.occupied[i][j]=true;
+        addProp(c,{i,j,kind:'tree',v:Math.floor(Math.random()*3),born:nowS()+0.3+Math.random()*0.5});
+      }
+    }
+  }
+}
+function newCity(){
+  const ground=document.createElement('canvas'); ground.width=GW; ground.height=GH;
+  const c={
+    idx:0, cx:0, cy:0,
+    ground, gctx:ground.getContext('2d'),
+    occupied:Array.from({length:N},()=>new Array(N).fill(false)),
+    unlockedR:0, dispR:4, tilePops:[], drawList:[], count:0, fountainAt:null,
+  };
+  cities.push(c);
+  c.unlockedR=4;
+  for(let i=C-4;i<=C+4;i++) for(let j=C-4;j<=C+4;j++) paintTile(c,i,j);
+  paintFountain(c);
+  /* arbres du parc */
+  for(let i=C-3;i<=C+3;i++) for(let j=C-3;j<=C+3;j++){
+    if(inPlaza(i,j)) continue;
+    if(i>=C+1 && j>=C+1) continue;             // parvis + fontaine
+    if(R()<0.45) addProp(c,{i,j,kind:'tree',v:Math.floor(R()*3),born:0});
+  }
+  addProp(c,{i:C,j:C,kind:'hdv'});             // hôtel de ville « La Boutique PME »
+  addProp(c,{i:C+1,j:C,kind:'mascot'});        // casquette bleue, sur le parvis
+  return c;
+}
+function cellOK(c,i,j,foot){
+  for(let a=0;a<foot;a++) for(let b=0;b<foot;b++){
+    const ii=i+a,jj=j+b;
+    if(ii>=N||jj>=N||isRoad(ii,jj)||inPark(ii,jj)||ringOf(ii,jj)>R_MAX||c.occupied[ii][jj]) return false;
+  }
+  return true;
+}
+function firstFree(c,list,foot){
+  for(const cell of list) if(cellOK(c,cell[0],cell[1],foot)) return cell;
+  return null;
+}
+function placeInCity(c,sector,foot){
+  /* candidat dans le quartier du secteur, mais jamais à plus de 3 anneaux du
+     front de construction global : la ville reste compacte et ronde */
+  const w=firstFree(c,SECTOR_CELLS[sector],foot);
+  const g=firstFree(c,ALL_CELLS,foot);
+  let cell=w;
+  if(!w || (g && ringOf(w[0],w[1])>ringOf(g[0],g[1])+3)) cell=g;
+  if(!cell) return null;
+  const [i,j]=cell;
+  for(let a=0;a<foot;a++) for(let b=0;b<foot;b++) c.occupied[i+a][j+b]=true;
+  const r=ringOf(i,j);
+  if(r>=c.unlockedR) unlockTo(c,r+1);
+  for(let a=0;a<foot;a++) for(let b=0;b<foot;b++) paintTile(c,i+a,j+b);       // sol immédiat sous le chantier
+  return {i,j,foot};
+}
+function placeBuilding(sector,tier){
+  const foot=tier===4?2:1;
+  const c=cities[0];
+  const pos=placeInCity(c,sector,foot);
+  return pos? {town:c, i:pos.i, j:pos.j, foot:pos.foot} : null;
+}
+
+/* ---------- Sprites pixel-art procéduraux ---------- */
+const spriteCache = {};
+function buildingSprite(co, dead){
+  const key = [co.sector,co.tier,co.variant,dead?1:0].join('|');
+  if(spriteCache[key]) return spriteCache[key];
+  const S=SECTORS[co.sector];
+  const foot = co.tier===4?2:1;
+  const hw = 16*foot-2, hh=hw/2;
+  const floors = [1,2,3,3,4][co.tier];
+  const fh=7, wallH = floors*fh+2;
+  const pitched = S.roof==='pitched';
+  const roofH = pitched? hh+9 : 6;
+  const W = hw*2+10, H = wallH + hh*2 + roofH + 14;
+  const cv = document.createElement('canvas'); cv.width=W; cv.height=H;
+  const g = cv.getContext('2d');
+  const rnd = mulberry32(co.sector*97+co.tier*13+co.variant*7+5);
+  const wall = S.walls[co.variant % S.walls.length];
+  const cx=W/2, by=H-2;
+  const P=(x,y)=>[Math.round(x),Math.round(y)];
+  const poly=(pts,c)=>{ g.fillStyle=c; g.beginPath(); g.moveTo(pts[0][0],pts[0][1]); for(let k=1;k<pts.length;k++) g.lineTo(pts[k][0],pts[k][1]); g.closePath(); g.fill(); };
+
+  const B=P(cx,by), L=P(cx-hw,by-hh), Rr=P(cx+hw,by-hh);
+  const up=([x,y],d)=>[x,y-d];
+  /* ombre portée au sol */
+  g.fillStyle='rgba(43,33,24,.16)';
+  g.beginPath(); g.ellipse(cx, by-hh+1, hw+3, hh+2.5, 0, 0, 7); g.fill();
+  /* faces */
+  poly([L,B,up(B,wallH),up(L,wallH)], shade(wall,-32));            // face gauche (ombre)
+  poly([B,Rr,up(Rr,wallH),up(B,wallH)], wall);                      // face droite (lumière)
+  /* plinthe */
+  poly([L,B,up(B,2),up(L,2)], shade(wall,-55));
+  poly([B,Rr,up(Rr,2),up(B,2)], shade(wall,-40));
+
+  /* fenêtres + volets — face droite */
+  const winCols = foot===2?4:2;
+  for(let k=1;k<=winCols;k++){
+    const t=k/(winCols+1), wx=Math.round(cx+t*hw), wyb=by-t*hh;
+    for(let f=0;f<floors;f++){
+      const y=Math.round(wyb-f*fh-6);
+      if(f===0 && k===1){ /* porte */
+        g.fillStyle=shade(wall,-90); g.fillRect(wx-2,y-3,5,8);
+        g.fillStyle='#3A2C20'; g.fillRect(wx-1,y-2,3,7);
+        continue;
+      }
+      g.fillStyle = rnd()<0.45? '#FFD98A' : '#4A3B30';             // allumée / éteinte
+      g.fillRect(wx-1,y,3,4);
+      g.fillStyle=S.id==='services'?'#8FA3B5':'#6E8B5E';            // volets
+      g.fillRect(wx-2,y,1,4); g.fillRect(wx+2,y,1,4);
+    }
+  }
+  /* fenêtres — face gauche (plus sobres) */
+  for(let k=1;k<=winCols;k++){
+    const t=k/(winCols+1), wx=Math.round(cx-t*hw), wyb=by-t*hh;
+    for(let f=0;f<floors;f++){
+      const y=Math.round(wyb-f*fh-6);
+      g.fillStyle = rnd()<0.3? shade('#FFD98A',-40) : '#3E332A';
+      g.fillRect(wx-1,y,3,4);
+    }
+  }
+  /* auvent rayé pour les commerces */
+  if(['bouche','resto','commerce','sante'].includes(S.id)){
+    const ax=Math.round(cx+0.18*hw), ay=Math.round(by-0.18*hh-9);
+    for(let s=0;s<6;s++){ g.fillStyle = s%2? '#F6EFE0' : S.awning; g.fillRect(ax+s*2,ay+s,2,3); }
+    g.fillStyle=shade(S.awning,-40); g.fillRect(ax,ay+6,12,1);
+    g.fillStyle=S.awning; g.fillRect(ax+1,ay-4,10,2);               // enseigne
+  }
+  /* toit */
+  const Tt=P(cx,by-wallH-2*hh), Lr=P(cx-hw,by-wallH-hh), Rt=P(cx+hw,by-wallH-hh), Bt=P(cx,by-wallH);
+  if(pitched){
+    const r=8+floors;
+    const r1=[cx-hw/2, by-wallH-1.5*hh-r], r2=[cx+hw/2, by-wallH-0.5*hh-r];
+    poly([Tt,Rt,r2,r1], shade(S.roofC,-38));                        // versant arrière
+    poly([Lr,Bt,r2,r1], S.roofC);                                   // versant avant
+    g.strokeStyle=shade(S.roofC,-60); g.lineWidth=1;
+    g.beginPath(); g.moveTo(r1[0],r1[1]); g.lineTo(r2[0],r2[1]); g.stroke();
+    for(const s of [0.35,0.7]){                                     // lignes de tuiles
+      g.strokeStyle=shade(S.roofC,-25);
+      g.beginPath();
+      g.moveTo(Lr[0]+(r1[0]-Lr[0])*s, Lr[1]+(r1[1]-Lr[1])*s);
+      g.lineTo(Bt[0]+(r2[0]-Bt[0])*s, Bt[1]+(r2[1]-Bt[1])*s);
+      g.stroke();
+    }
+    if(S.id==='bouche'||rnd()<0.3){                                 // cheminée
+      g.fillStyle='#9C5A40'; g.fillRect(Math.round(cx+hw*0.3),Math.round(by-wallH-hh-r-2),4,8);
+      g.fillStyle='#7A4430'; g.fillRect(Math.round(cx+hw*0.3),Math.round(by-wallH-hh-r-3),4,2);
+    }
+  } else {
+    poly([Tt,Rt,Bt,Lr], S.roofC);
+    poly([Lr,Bt,up(Bt,3),up(Lr,3)], shade(S.roofC,-35));            // parapet
+    poly([Bt,Rt,up(Rt,3),up(Bt,3)], shade(S.roofC,-20));
+    g.fillStyle=shade(S.roofC,30); g.fillRect(cx-3,by-wallH-hh-4,6,4);  // bloc clim
+    if(S.id==='industrie'){                                         // cheminée d'usine
+      g.fillStyle='#8C5A48'; g.fillRect(Math.round(cx+hw*0.35),Math.round(by-wallH-hh-16),5,16);
+      g.fillStyle='#6E4438'; g.fillRect(Math.round(cx+hw*0.35),Math.round(by-wallH-hh-17),5,2);
+    }
+    if(S.id==='auto'){                                              // grande porte de garage
+      const gx=Math.round(cx+hw*0.45), gy=by-Math.round(0.45*hh);
+      g.fillStyle='#55606B'; g.fillRect(gx-5,gy-10,11,10);
+      g.fillStyle='#48525C'; for(let l=0;l<4;l++) g.fillRect(gx-5,gy-9+l*2,11,1);
+    }
+  }
+  /* drapeau pour les très grosses cessions */
+  if(co.tier===4){
+    const fx=cx, fy=by-wallH-2*hh-(pitched?16:6);
+    g.fillStyle='#5A4632'; g.fillRect(fx,fy-10,1,10);
+    g.fillStyle='#FA5D19'; g.fillRect(fx+1,fy-10,6,4);
+  }
+  if(dead){
+    /* carcasse calcinée */
+    const cv2=document.createElement('canvas'); cv2.width=W; cv2.height=H;
+    const g2=cv2.getContext('2d');
+    g2.filter='grayscale(0.55) brightness(0.4) sepia(0.3)';
+    g2.drawImage(cv,0,0);
+    g2.filter='none';
+    const rs=mulberry32(co.variant*31+7);
+    g2.fillStyle='rgba(255,120,40,0.85)';                 // braises résiduelles
+    for(let k=0;k<3;k++) g2.fillRect(Math.round(cx+(rs()-0.5)*hw), Math.round(by-4-rs()*wallH), 1,1);
+    spriteCache[key]=cv2; return cv2;
+  }
+  spriteCache[key]=cv; return cv;
+}
+function mascotSprite(){
+  const key='mascot';
+  if(spriteCache[key]) return spriteCache[key];
+  const cv=document.createElement('canvas'); cv.width=14; cv.height=18;
+  const g=cv.getContext('2d');
+  /* casquette bleue */
+  g.fillStyle='#2F6BD8'; g.fillRect(4,0,6,1); g.fillRect(3,1,8,2);
+  g.fillStyle='#1F4FA8'; g.fillRect(3,3,10,1);                       // visière
+  /* visage */
+  g.fillStyle='#F2C29B'; g.fillRect(4,4,6,3); g.fillRect(5,7,4,1);
+  g.fillStyle='#2B2118'; g.fillRect(5,5,1,1); g.fillRect(8,5,1,1);   // yeux
+  /* corps : chemise crème + tablier terracotta */
+  g.fillStyle='#F6EFE0'; g.fillRect(3,8,8,5);
+  g.fillStyle='#C8542E'; g.fillRect(4,9,6,4);
+  g.fillStyle='#A8431F'; g.fillRect(4,9,6,1);                        // bavette
+  /* bras */
+  g.fillStyle='#F2C29B'; g.fillRect(2,9,1,3); g.fillRect(11,9,1,3);
+  /* jambes + chaussures */
+  g.fillStyle='#3A2C20'; g.fillRect(4,13,2,3); g.fillRect(8,13,2,3);
+  g.fillStyle='#2B2118'; g.fillRect(3,16,3,1); g.fillRect(8,16,3,1);
+  spriteCache[key]=cv; return cv;
+}
+function townHallSprite(){
+  const key='hdv';
+  if(spriteCache[key]) return spriteCache[key];
+  const hw=30, hh=15, wallH=26;                  // emprise 2×2 tuiles
+  const W=hw*2+14, H=wallH+hh*2+36;
+  const cv=document.createElement('canvas'); cv.width=W; cv.height=H;
+  const g=cv.getContext('2d');
+  const cx=W/2, by=H-3;
+  const P=(x,y)=>[Math.round(x),Math.round(y)];
+  const poly=(pts,c)=>{ g.fillStyle=c; g.beginPath(); g.moveTo(pts[0][0],pts[0][1]); for(let k=1;k<pts.length;k++) g.lineTo(pts[k][0],pts[k][1]); g.closePath(); g.fill(); };
+  const up=([x,y],d)=>[x,y-d];
+  const wall='#F0E7D3';
+  const B=P(cx,by), L=P(cx-hw,by-hh), Rr=P(cx+hw,by-hh);
+  /* ombre + perron */
+  g.fillStyle='rgba(43,33,24,.16)';
+  g.beginPath(); g.ellipse(cx,by-hh+2,hw+5,hh+4,0,0,7); g.fill();
+  poly([P(cx-8,by+2),P(cx+8,by+2),P(cx+10,by-1),P(cx-10,by-1)],'#D8CBAF');   // marches
+  poly([P(cx-7,by-1),P(cx+7,by-1),P(cx+9,by-3),P(cx-9,by-3)],'#E4D8BC');
+  /* murs */
+  poly([L,B,up(B,wallH),up(L,wallH)], shade(wall,-34));
+  poly([B,Rr,up(Rr,wallH),up(B,wallH)], wall);
+  poly([L,B,up(B,2),up(L,2)], shade(wall,-58));                             // soubassement
+  poly([B,Rr,up(Rr,2),up(B,2)], shade(wall,-44));
+  /* chaînages d'angle */
+  g.fillStyle=shade(wall,18);
+  for(let y=4;y<wallH-2;y+=5){ g.fillRect(cx-1,by-y-3,2,3); }
+  /* porte double + colonnes (face droite, axe central) */
+  const dx=Math.round(cx+hw*0.5), dyb=Math.round(by-hh*0.5);
+  g.fillStyle=shade(wall,-95); g.fillRect(dx-4,dyb-11,9,11);
+  g.fillStyle='#3A2C20'; g.fillRect(dx-3,dyb-10,3,10); g.fillRect(dx+1,dyb-10,3,10);
+  g.fillStyle=shade(wall,25); g.fillRect(dx-6,dyb-11,2,11); g.fillRect(dx+6,dyb-11,2,11);  // colonnes
+  /* fenêtres hautes (étage) — face droite */
+  for(const tx of [0.22,0.5,0.78]){
+    const x=Math.round(cx+tx*hw), yb=by-tx*hh;
+    g.fillStyle='#FFD98A'; g.fillRect(x-1,Math.round(yb-wallH+9),3,5);
+    g.fillStyle='#6E8B5E'; g.fillRect(x-2,Math.round(yb-wallH+9),1,5); g.fillRect(x+2,Math.round(yb-wallH+9),1,5);
+  }
+  /* fenêtres — face gauche */
+  for(const tx of [0.25,0.55,0.85]){
+    const x=Math.round(cx-tx*hw), yb=by-tx*hh;
+    g.fillStyle='#4A3B30'; g.fillRect(x-1,Math.round(yb-wallH+9),3,5);
+    g.fillStyle=shade('#FFD98A',-60); g.fillRect(x-1,Math.round(yb-9),3,4);
+  }
+  /* toit ardoise */
+  const Tt=P(cx,by-wallH-2*hh), Lr=P(cx-hw,by-wallH-hh), Rt=P(cx+hw,by-wallH-hh), Bt=P(cx,by-wallH);
+  const r=13, roofC='#5E6B78';
+  const r1=[cx-hw/2, by-wallH-1.5*hh-r], r2=[cx+hw/2, by-wallH-0.5*hh-r];
+  poly([Tt,Rt,r2,r1], shade(roofC,-38));
+  poly([Lr,Bt,r2,r1], roofC);
+  g.strokeStyle=shade(roofC,-60); g.lineWidth=1;
+  g.beginPath(); g.moveTo(r1[0],r1[1]); g.lineTo(r2[0],r2[1]); g.stroke();
+  for(const s of [0.35,0.7]){
+    g.strokeStyle=shade(roofC,-22);
+    g.beginPath();
+    g.moveTo(Lr[0]+(r1[0]-Lr[0])*s, Lr[1]+(r1[1]-Lr[1])*s);
+    g.lineTo(Bt[0]+(r2[0]-Bt[0])*s, Bt[1]+(r2[1]-Bt[1])*s);
+    g.stroke();
+  }
+  /* fronton + horloge au centre du faîte */
+  const fx=Math.round((r1[0]+r2[0])/2), fy=Math.round((r1[1]+r2[1])/2);
+  poly([P(fx-8,fy+3),P(fx+8,fy+3),P(fx,fy-9)],'#F0E7D3');
+  g.strokeStyle='#2B2118'; g.strokeRect(fx-8.5,fy+2.5,17,1);
+  g.fillStyle='#FBF4E7'; g.beginPath(); g.arc(fx,fy-1,3.4,0,7); g.fill();
+  g.strokeStyle='#2B2118'; g.lineWidth=1;
+  g.beginPath(); g.arc(fx,fy-1,3.4,0,7); g.stroke();
+  g.beginPath(); g.moveTo(fx,fy-1); g.lineTo(fx,fy-3.4); g.moveTo(fx,fy-1); g.lineTo(fx+2,fy-0.4); g.stroke();
+  /* drapeau flamme */
+  g.fillStyle='#5A4632'; g.fillRect(fx-1,fy-22,1,13);
+  g.fillStyle='#FA5D19'; g.fillRect(fx,fy-22,8,4); g.fillRect(fx,fy-18,6,1);
+  /* frise-enseigne « LA BOUTIQUE PME », accrochée à l'avant-toit (dessinée
+     après le toit pour rester entièrement lisible) */
+  g.font='9px VT323';
+  const txt='LA BOUTIQUE PME';
+  const tw=Math.ceil(g.measureText(txt).width);
+  const bw=Math.min(W-4,tw+10), bx0=Math.round(cx-bw/2), byy=by-hh-wallH+1;
+  g.fillStyle='rgba(43,33,24,.3)'; g.fillRect(bx0+2,byy+2,bw,12);
+  g.fillStyle='#2B2118'; g.fillRect(bx0,byy,bw,12);
+  g.fillStyle='#FBF4E7'; g.fillRect(bx0+1,byy+1,bw-2,10);
+  g.fillStyle='#C8542E'; g.textAlign='center'; g.textBaseline='middle';
+  g.fillText(txt,cx,byy+6);
+  spriteCache[key]=cv; return cv;
+}
+function signSprite(){
+  const key='sign';
+  if(spriteCache[key]) return spriteCache[key];
+  const cv=document.createElement('canvas');
+  const g0=cv.getContext('2d');
+  g0.font='9px VT323';
+  const txt='LA BOUTIQUE PME';
+  const tw=Math.ceil(g0.measureText(txt).width);
+  const W=tw+14, H=26;
+  cv.width=W; cv.height=H;
+  const g=cv.getContext('2d');
+  /* poteaux bois */
+  g.fillStyle='#8A5A36'; g.fillRect(4,12,3,13); g.fillRect(W-7,12,3,13);
+  g.fillStyle='#6E4428'; g.fillRect(6,12,1,13); g.fillRect(W-5,12,1,13);
+  /* panneau crème, liseré encre, ombre dure */
+  g.fillStyle='rgba(43,33,24,.3)'; g.fillRect(2,3,W-2,14);
+  g.fillStyle='#2B2118'; g.fillRect(0,1,W-2,14);
+  g.fillStyle='#FBF4E7'; g.fillRect(1,2,W-4,12);
+  g.fillStyle='#C8542E';
+  g.font='9px VT323'; g.textAlign='center'; g.textBaseline='middle';
+  g.fillText(txt, (W-2)/2, 8);
+  spriteCache[key]=cv; return cv;
+}
+/* l'enseigne utilise VT323 : on régénère les sprites quand la police est chargée */
+if(document.fonts && document.fonts.ready) document.fonts.ready.then(()=>{ delete spriteCache['sign']; delete spriteCache['hdv']; });
+
+function treeSprite(v){
+  const key='tree'+v;
+  if(spriteCache[key]) return spriteCache[key];
+  const cv=document.createElement('canvas'); cv.width=18; cv.height=24;
+  const g=cv.getContext('2d');
+  g.fillStyle='#6B4A2E'; g.fillRect(8,16,2,6);
+  const greens=[['#7FA05A','#9DBE7A'],['#6E945E','#8CB478'],['#85A050','#A3BE6E']][v];
+  g.fillStyle=greens[0];
+  g.beginPath(); g.arc(9,11,6,0,7); g.fill();
+  g.fillStyle=greens[1];
+  g.beginPath(); g.arc(7,9,4,0,7); g.fill();
+  g.fillStyle=shade(greens[0],-30); g.fillRect(11,13,3,2);
+  spriteCache[key]=cv; return cv;
+}
+
+/* ---------- État du monde ---------- */
+const buildings = [];   // {co, town, i,j,foot, state:'building'|'built'|'dying'|'dead', t0, dur, ev}
+const particles = [];   // {x,y,vx,vy,life,age,c,r}
+const floats = [];      // {x,y,age,txt,c}
+function addBuilding(co, dur, ev){
+  const pos = placeBuilding(co.sector, co.tier);
+  if(!pos) return null;
+  const b = { co, ...pos, state:'building', t0:nowS(), dur, ev };
+  buildings.push(b);
+  pos.town.count++;
+  pos.town.drawList.push({b, depth:(b.i+b.foot-1)+(b.j+b.foot-1)});
+  pos.town.drawList.sort((a,z)=>a.depth-z.depth);
+  return b;
+}
+newCity();   // la première ville naît avec sa place, son parc, sa mascotte et son panneau
+
+/* ---------- Audio (synthèse WebAudio, pas d'assets) ---------- */
+let AC=null, master=null, soundOn=true, lastDing=0;
+function initAudio(){
+  if(AC) return;
+  AC = new (window.AudioContext||window.webkitAudioContext)();
+  master = AC.createGain(); master.gain.value=0.14; master.connect(AC.destination);
+}
+function sfxHammer(){
+  if(!AC||!soundOn) return;
+  const t=AC.currentTime;
+  const o=AC.createOscillator(), gn=AC.createGain(), f=AC.createBiquadFilter();
+  o.type='triangle'; o.frequency.setValueAtTime(170+Math.random()*60,t);
+  f.type='lowpass'; f.frequency.value=700;
+  gn.gain.setValueAtTime(0.5,t); gn.gain.exponentialRampToValueAtTime(0.001,t+0.06);
+  o.connect(f); f.connect(gn); gn.connect(master); o.start(t); o.stop(t+0.07);
+}
+function sfxDing(big){
+  if(!AC||!soundOn) return;
+  const now=performance.now(); if(now-lastDing<90) return; lastDing=now;
+  const t=AC.currentTime;
+  [big?523:740, big?784:1108].forEach((fq,k)=>{
+    const o=AC.createOscillator(), gn=AC.createGain();
+    o.type='sine'; o.frequency.value=fq;
+    gn.gain.setValueAtTime(k?0.12:0.3,t); gn.gain.exponentialRampToValueAtTime(0.001,t+(big?0.7:0.4));
+    o.connect(gn); gn.connect(master); o.start(t); o.stop(t+0.8);
+  });
+}
+function sfxOut(){
+  if(!AC||!soundOn) return;
+  const t=AC.currentTime, n=AC.sampleRate*0.5, buf=AC.createBuffer(1,n,AC.sampleRate), d=buf.getChannelData(0);
+  for(let i=0;i<n;i++) d[i]=(Math.random()*2-1)*(1-i/n);
+  const src=AC.createBufferSource(); src.buffer=buf;
+  const f=AC.createBiquadFilter(); f.type='lowpass';
+  f.frequency.setValueAtTime(600,t); f.frequency.exponentialRampToValueAtTime(90,t+0.5);
+  const gn=AC.createGain(); gn.gain.value=0.5;
+  src.connect(f); f.connect(gn); gn.connect(master); src.start(t);
+}
+
+/* ---------- Replay / horloge ---------- */
+/* cadence adaptée au volume : ~3 min de replay à ×1 quel que soit le mois */
+const EVT_INTERVAL = Math.min(0.55, Math.max(0.075, 168/Math.max(1,events.length)));
+let running=false, paused=false, speed=1, replayClock=0, evtIdx=0, ended=false;
+let stockIdx=0, stockTimer=0;
+const stats = { count:0, money:0, dead:0 };
+const disp  = { count:0, money:0, dead:0 };
+let currentDate=null;
+function nowS(){ return performance.now()/1000; }
+
+function fireEvent(ev){
+  currentDate = ev.date;
+  if(ev.kind==='cession'){
+    const dur = Math.max(0.45, 1.5/speed);
+    const b = addBuilding(ev.co, dur, ev);
+    stats.count++;
+    if(ev.co.priceKnown) stats.money += ev.co.price;
+    feed(ev.co, false, ev.date);
+    if(b){ sfxHammer(); setTimeout(sfxHammer, dur*450); }
+  } else {
+    const alive = buildings.filter(b=>b.state==='built');
+    if(!alive.length) return;
+    /* on éteint de préférence un bâtiment du même secteur que la liquidation réelle */
+    const pool = ev.co? (alive.filter(b=>b.co.sector===ev.co.sector) ) : alive;
+    const b = (pool.length? pool : alive)[Math.floor(R()*(pool.length? pool.length : alive.length))];
+    if(ev.co) b.co = { ...b.co, name:ev.co.name, city:ev.co.city, dept:ev.co.dept,
+                       activity:ev.co.activity, priceKnown:false };
+    b.state='dying'; b.t0=nowS(); b.deathDate=ev.date;
+    stats.dead++;
+    feed(b.co, true, ev.date);
+    sfxOut();
+  }
+}
+
+/* ---------- Feed ---------- */
+const feedEl = document.getElementById('hud-feed');
+let lastFeedAt = 0;
+function feedSpecial(html){
+  const el=document.createElement('div');
+  el.className='feed-item';
+  el.style.background='var(--encre)'; el.style.color='var(--creme)';
+  el.innerHTML=`<span class="ico">🏗️</span><span>${html}</span>`;
+  feedEl.appendChild(el);
+  while(feedEl.children.length>5) feedEl.removeChild(feedEl.firstChild);
+}
+function feed(co, neg, date){
+  /* à haut débit (mois entier), on n'affiche qu'un échantillon pour rester lisible */
+  const nowF=performance.now();
+  if(!neg && nowF-lastFeedAt<120) return;
+  lastFeedAt=nowF;
+  const S=SECTORS[co.sector];
+  const el=document.createElement('div');
+  el.className='feed-item'+(neg?' neg':'');
+  const prix = neg? '' : (co.priceKnown? `<span class="prix">${fmtEUR.format(co.price)}</span>` : `<span class="prix" style="color:var(--muted)">prix n.c.</span>`);
+  el.innerHTML = neg
+    ? `<span class="ico">🔥</span><span><b>${co.name}</b> placée en liquidation judiciaire — ${co.city} (${co.dept})</span>`
+    : `<span class="ico">${S.icon}</span><span><b>${co.name}</b> ${S.verb} à ${co.city} (${co.dept}) — ${prix}</span>`;
+  el.style.borderLeftColor = neg? '#A8431F' : S.awning;
+  feedEl.appendChild(el);
+  while(feedEl.children.length>5) feedEl.removeChild(feedEl.firstChild);
+}
+
+/* ---------- Filtres secteur ---------- */
+let filterSector = null;
+const filtersEl = document.getElementById('hud-filters');
+{
+  const all=document.createElement('button');
+  all.className='chip on'; all.innerHTML='<span class="dot" style="background:var(--flamme)"></span>Tout';
+  all.onclick=()=>setFilter(null,all);
+  filtersEl.appendChild(all);
+  SECTORS.forEach((s,k)=>{
+    const c=document.createElement('button');
+    c.className='chip';
+    c.innerHTML=`<span class="dot" style="background:${s.awning}"></span>${s.label}`;
+    c.onclick=()=>setFilter(k,c);
+    filtersEl.appendChild(c);
+  });
+  function setFilter(k,btn){
+    filterSector = (filterSector===k)? null : k;
+    [...filtersEl.children].forEach(b=>b.classList.remove('on'));
+    (filterSector===null? filtersEl.children[0] : btn).classList.add('on');
+  }
+}
+
+/* ---------- Canvas / caméra ---------- */
+const canvas = document.getElementById('city');
+const ctx = canvas.getContext('2d');
+let DPR=1, vw=0, vh=0;
+const cam = { x:0, y:0, z:2 };
+function resize(){
+  DPR = Math.min(2, window.devicePixelRatio||1);
+  vw = window.innerWidth; vh = window.innerHeight;
+  canvas.width=vw*DPR; canvas.height=vh*DPR;
+  canvas.style.width=vw+'px'; canvas.style.height=vh+'px';
+}
+window.addEventListener('resize', resize); resize();
+/* cadrage automatique : la caméra dézoome au rythme de la croissance des villes */
+let autoFit=true;
+function setAutoFit(v){
+  autoFit=v;
+  const b=document.getElementById('b-fit');
+  if(b) b.classList.toggle('on', v);
+}
+function fitTarget(){
+  let x0=1e9,x1=-1e9,y0=1e9,y1=-1e9;
+  for(const c of cities){
+    const hw=(c.dispR+1.9)*2*HW, hh=(c.dispR+1.9)*2*HH;
+    x0=Math.min(x0,c.cx-hw); x1=Math.max(x1,c.cx+hw);
+    y0=Math.min(y0,c.cy-hh-105); y1=Math.max(y1,c.cy+hh+28);
+  }
+  const z=Math.max(0.16, Math.min(2.8, Math.min(vw/(x1-x0+50), vh/(y1-y0+150))));
+  return { z, x:vw/2-(x0+x1)/2*z, y:vh/2-(y0+y1)/2*z };
+}
+{ const tt=fitTarget(); cam.z=tt.z; cam.x=tt.x; cam.y=tt.y; }
+/* pan & zoom (désactive le cadrage auto ; ⛶ pour le réactiver) */
+let drag=null;
+canvas.addEventListener('mousedown', e=>{ drag={x:e.clientX,y:e.clientY,cx:cam.x,cy:cam.y,moved:false}; canvas.classList.add('dragging'); });
+window.addEventListener('mousemove', e=>{
+  if(drag){
+    if(Math.abs(e.clientX-drag.x)+Math.abs(e.clientY-drag.y)>4){ drag.moved=true; setAutoFit(false); }
+    if(drag.moved){ cam.x=drag.cx+(e.clientX-drag.x); cam.y=drag.cy+(e.clientY-drag.y); }
+  }
+  mouse.x=e.clientX; mouse.y=e.clientY; mouse.active=true;
+});
+window.addEventListener('mouseup', ()=>{ drag=null; canvas.classList.remove('dragging'); });
+canvas.addEventListener('wheel', e=>{
+  e.preventDefault();
+  setAutoFit(false);
+  const z0=cam.z, z1=Math.max(0.12, Math.min(4.5, z0*(e.deltaY<0?1.12:0.89)));
+  cam.x = e.clientX-(e.clientX-cam.x)*z1/z0;
+  cam.y = e.clientY-(e.clientY-cam.y)*z1/z0;
+  cam.z = z1;
+},{passive:false});
+/* touch pan */
+canvas.addEventListener('touchstart', e=>{ const t=e.touches[0]; drag={x:t.clientX,y:t.clientY,cx:cam.x,cy:cam.y}; },{passive:true});
+canvas.addEventListener('touchmove', e=>{ if(!drag) return; setAutoFit(false); const t=e.touches[0]; cam.x=drag.cx+(t.clientX-drag.x); cam.y=drag.cy+(t.clientY-drag.y); },{passive:true});
+
+/* ---------- Tooltip / picking ---------- */
+const mouse={x:0,y:0,active:false};
+const tipEl=document.getElementById('tooltip');
+let pickBoxes=[];
+function updateTooltip(){
+  if(!mouse.active||drag){ tipEl.style.display='none'; return; }
+  const wx=(mouse.x-cam.x)/cam.z, wy=(mouse.y-cam.y)/cam.z;
+  let hit=null;
+  for(let k=pickBoxes.length-1;k>=0;k--){
+    const p=pickBoxes[k];
+    if(wx>=p.x&&wx<=p.x+p.w&&wy>=p.y&&wy<=p.y+p.h){ hit=p.b; break; }
+  }
+  if(!hit){ tipEl.style.display='none'; return; }
+  const co=hit.co, S=SECTORS[co.sector];
+  const dead = hit.state==='dead'||hit.state==='dying';
+  tipEl.className = dead? 'dead':'';
+  tipEl.innerHTML = `
+    <div class="t-name">${co.name}</div>
+    <div class="t-prix">${dead? '🔥 Liquidation judiciaire' : (co.priceKnown? fmtEUR.format(co.price) : 'Prix non communiqué')}</div>
+    <div class="t-meta">${S.icon} ${S.label} · ${co.city} (${co.dept})${hit.ev? ' · '+fmtDate(hit.ev.date) : (hit.deathDate? ' · '+fmtDate(hit.deathDate):'')}</div>
+    ${co.activity? `<div class="t-meta" style="font-style:italic">« ${co.activity} »</div>` : ''}`;
+  tipEl.style.display='block';
+  const tw=tipEl.offsetWidth;
+  tipEl.style.left = Math.min(vw-tw-12, mouse.x+16)+'px';
+  tipEl.style.top  = Math.max(10, mouse.y-tipEl.offsetHeight-10)+'px';
+}
+
+/* ---------- Particules / textes flottants ---------- */
+function dust(x,y,n,c){
+  for(let k=0;k<n;k++) particles.push({x:x+(Math.random()-0.5)*16, y:y+(Math.random()-0.5)*4,
+    vx:(Math.random()-0.5)*14, vy:-6-Math.random()*12, life:0.5+Math.random()*0.5, age:0,
+    r:1.5+Math.random()*2, c});
+}
+function smoke(x,y){
+  particles.push({x:x+(Math.random()-0.5)*10, y, vx:(Math.random()-0.5)*5, vy:-14-Math.random()*8,
+    life:1+Math.random(), age:0, r:2+Math.random()*2.5, c:'108,99,88'});
+}
+function flame(x,y){
+  particles.push({x, y, vx:(Math.random()-0.5)*6, vy:-16-Math.random()*14,
+    life:0.25+Math.random()*0.4, age:0, r:1.2+Math.random()*2,
+    c:pick(['250,93,25','255,160,40','255,214,90'], Math.random)});
+}
+
+/* ---------- Boucle de rendu ---------- */
+let lastT=nowS();
+function frame(){
+  const t=nowS(), dt=Math.min(0.05, t-lastT); lastT=t;
+
+  if(running&&!paused){
+    /* prologue : la ville existante apparaît vite */
+    if(stockIdx<stock.length){
+      stockTimer-=dt;
+      while(stockTimer<=0 && stockIdx<stock.length){
+        const sco=stock[stockIdx++];
+        addBuilding(sco, 0.4);
+        stats.count++;                                  // le prologue compte aussi : ce sont des cessions de la période
+        if(sco.priceKnown) stats.money += sco.price;
+        if(stockIdx%3===0) sfxHammer();
+        stockTimer+=0.045;
+      }
+    } else {
+      replayClock += dt*speed;
+      while(evtIdx<events.length && replayClock>=evtIdx*EVT_INTERVAL){
+        fireEvent(events[evtIdx++]);
+      }
+      if(evtIdx>=events.length && !ended && replayClock>evtIdx*EVT_INTERVAL+2.5){
+        ended=true; showEnd();
+      }
+    }
+  }
+
+  /* compteurs animés */
+  disp.count += (stats.count-disp.count)*Math.min(1,dt*8);
+  disp.money += (stats.money-disp.money)*Math.min(1,dt*8);
+  disp.dead  += (stats.dead-disp.dead)*Math.min(1,dt*8);
+  document.getElementById('c-count').textContent = Math.round(disp.count).toLocaleString('fr-FR');
+  document.getElementById('c-money').textContent = (REAL?'≥ ':'')+fmtCompact(disp.money)+' échangés';
+  document.getElementById('c-dead').textContent  = Math.round(disp.dead*LIQ_RATIO).toLocaleString('fr-FR');
+  /* timeline : curseur + date courante */
+  if(currentDate){
+    const target=Math.min(1,Math.max(0,(currentDate.getTime()-TL.from)/Math.max(1,TL.to-TL.from)));
+    TL.disp += (target-TL.disp)*Math.min(1,dt*3);
+    TL.fill.style.width=(TL.disp*100)+'%';
+    TL.cursor.style.left=(TL.disp*100)+'%';
+    TL.date.innerHTML = fmtDateLong(currentDate).replace(/^(\S+)/,'<b>$1</b>');
+  }
+
+  /* caméra : suivi automatique de la croissance */
+  if(autoFit){
+    const tt=fitTarget(), k=Math.min(1,dt*2.2);
+    cam.z+=(tt.z-cam.z)*k; cam.x+=(tt.x-cam.x)*k; cam.y+=(tt.y-cam.y)*k;
+  }
+
+  /* ----- dessin ----- */
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  ctx.clearRect(0,0,vw,vh);
+  ctx.translate(cam.x,cam.y); ctx.scale(cam.z,cam.z);
+  ctx.imageSmoothingEnabled=false;
+
+  /* îles : pops de terrain + socle + sol */
+  for(const c of cities){
+    c.dispR += (Math.min(c.unlockedR,C)+0.6-c.dispR)*Math.min(1,dt*2.2);
+    for(let k=c.tilePops.length-1;k>=0;k--){
+      const p=c.tilePops[k];
+      if(t>=p.at){ paintTile(c,p.i,p.j); c.tilePops.splice(k,1); }
+    }
+    if(c.fountainAt && t>=c.fountainAt){ paintFountain(c); c.fountainAt=null; }
+    const eR=c.dispR+1.5;
+    ctx.fillStyle='rgba(43,33,24,.10)';
+    ctx.beginPath(); ctx.ellipse(c.cx, c.cy+8, eR*2*HW, eR*2*HH*1.06, 0, 0, 7); ctx.fill();
+    ctx.drawImage(c.ground, c.cx-GW/2, c.cy-2*C*HH);
+  }
+
+  pickBoxes=[];
+  for(const town of cities)
+  for(const d of town.drawList){
+    if(d.prop){
+      const px=town.cx+(d.prop.i-d.prop.j)*HW, py=town.cy+(d.prop.i+d.prop.j-2*C)*HH+2*HH;
+      if(d.prop.kind==='mascot'){
+        const s=mascotSprite();
+        const bob=Math.round(Math.sin(t*2.4)*1.2);
+        ctx.fillStyle='rgba(43,33,24,.18)';
+        ctx.beginPath(); ctx.ellipse(px,py-1,6,2.4,0,0,7); ctx.fill();
+        ctx.drawImage(s, px-7, py-s.height-1+bob);
+      } else if(d.prop.kind==='hdv'){
+        const s=townHallSprite();
+        ctx.drawImage(s, Math.round(px-s.width/2), py-s.height);
+      } else if(d.prop.kind==='sign'){
+        const s=signSprite();
+        ctx.drawImage(s, Math.round(px-s.width/2), py-s.height);
+      } else {
+        const s=treeSprite(d.prop.v);
+        const g=d.prop.born? Math.min(1,Math.max(0,(t-d.prop.born)/0.35)) : 1;
+        if(g<=0) continue;
+        ctx.drawImage(s, px-9*g, py+2-24*g, 18*g, 24*g);
+      }
+      continue;
+    }
+    const b=d.b, co=b.co;
+    const foot=b.foot;
+    const bx = town.cx+(b.i-b.j)*HW;                              // i-j constant sur la diagonale
+    const bottomY = town.cy+(b.i+b.j+2*foot-2*C)*HH;              // coin bas du losange combiné
+    const dimmed = filterSector!==null && co.sector!==filterSector;
+    ctx.globalAlpha = dimmed? 0.13 : 1;
+
+    if(b.state==='building'){
+      const p=Math.min(1,(t-b.t0)/b.dur);
+      const spr=buildingSprite(co,false);
+      const e = p<0.85? p/0.85 : 1;
+      const hVis=Math.round(spr.height*e*e);
+      ctx.save();
+      ctx.beginPath(); ctx.rect(bx-spr.width/2-4, bottomY-hVis, spr.width+8, hVis+2); ctx.clip();
+      const squash = p>0.85? 1+0.06*Math.sin((p-0.85)/0.15*Math.PI) : 1;
+      ctx.drawImage(spr, bx-spr.width/2, bottomY-spr.height*squash, spr.width, spr.height*squash);
+      ctx.restore();
+      /* échafaudage */
+      ctx.strokeStyle='rgba(122,90,50,.8)'; ctx.lineWidth=1;
+      const sh=Math.min(spr.height-6, hVis+8);
+      ctx.beginPath();
+      ctx.moveTo(bx-spr.width/2+2,bottomY); ctx.lineTo(bx-spr.width/2+2,bottomY-sh);
+      ctx.moveTo(bx+spr.width/2-2,bottomY); ctx.lineTo(bx+spr.width/2-2,bottomY-sh);
+      for(let yy=bottomY-6; yy>bottomY-sh; yy-=7){ ctx.moveTo(bx-spr.width/2+2,yy); ctx.lineTo(bx+spr.width/2-2,yy); }
+      ctx.stroke();
+      if(Math.random()<0.35) dust(bx,bottomY,1,'171,141,99');
+      if(p>=1){
+        b.state='built';
+        dust(bx,bottomY,12,'171,141,99');
+        sfxDing(co.tier>=3);
+        if(b.ev&&co.priceKnown) floats.push({x:bx,y:bottomY-spr.height-6,age:0,txt:'+'+fmtCompact(co.price),c:'#C8542E'});
+        else if(b.ev) floats.push({x:bx,y:bottomY-spr.height-6,age:0,txt:'transmise ✓',c:'#6E8B5E'});
+      }
+    } else if(b.state==='dying'){
+      /* incendie : lueur, flammes, fumée, puis carcasse calcinée */
+      const p=Math.min(1,(t-b.t0)/2.4);
+      const spr=buildingSprite(co, p>0.55);
+      if(p<0.92){
+        const fl=(0.2+0.13*Math.sin(t*23+b.i*7))*(1-p*0.7);
+        ctx.fillStyle=`rgba(250,93,25,${fl.toFixed(3)})`;
+        ctx.beginPath(); ctx.ellipse(bx, bottomY-spr.height*0.4, spr.width*0.75, spr.height*0.6, 0, 0, 7); ctx.fill();
+      }
+      ctx.drawImage(spr, bx-spr.width/2, bottomY-spr.height);
+      if(p<0.85){
+        flame(bx+(Math.random()-0.5)*spr.width*0.7, bottomY-Math.random()*spr.height*0.85);
+        if(Math.random()<0.7) flame(bx+(Math.random()-0.5)*spr.width*0.5, bottomY-spr.height*(0.4+Math.random()*0.5));
+        if(Math.random()<0.55) smoke(bx, bottomY-spr.height*0.95);
+      } else if(Math.random()<0.4) smoke(bx, bottomY-spr.height*0.7);
+      if(p>=1) b.state='dead';
+      pickBoxes.push({x:bx-spr.width/2,y:bottomY-spr.height,w:spr.width,h:spr.height,b});
+    } else {
+      const spr=buildingSprite(co, b.state==='dead');
+      ctx.drawImage(spr, bx-spr.width/2, bottomY-spr.height);
+      if(b.state==='dead'&&Math.random()<0.008) smoke(bx, bottomY-spr.height*0.8);   // fumerolles
+      pickBoxes.push({x:bx-spr.width/2,y:bottomY-spr.height,w:spr.width,h:spr.height,b});
+    }
+    ctx.globalAlpha=1;
+  }
+
+  /* particules */
+  for(let k=particles.length-1;k>=0;k--){
+    const p=particles[k]; p.age+=dt;
+    if(p.age>=p.life){ particles.splice(k,1); continue; }
+    p.x+=p.vx*dt; p.y+=p.vy*dt; p.vy*=0.96;
+    const a=(1-p.age/p.life)*0.55;
+    ctx.fillStyle=`rgba(${p.c},${a})`;
+    ctx.beginPath(); ctx.arc(p.x,p.y,p.r*(1+p.age),0,7); ctx.fill();
+  }
+  /* textes flottants */
+  ctx.textAlign='center';
+  for(let k=floats.length-1;k>=0;k--){
+    const f=floats[k]; f.age+=dt;
+    if(f.age>1.6){ floats.splice(k,1); continue; }
+    ctx.globalAlpha=Math.max(0,1-f.age/1.6);
+    ctx.font='12px VT323'; ctx.fillStyle=f.c;
+    ctx.fillText(f.txt, f.x, f.y-f.age*16);
+    ctx.globalAlpha=1;
+  }
+
+  if(exportMode) drawExportHud();
+  updateTooltip();
+  requestAnimationFrame(frame);
+}
+
+/* ---------- Export vidéo du replay (canvas + son → WebM/MP4) ----------
+   Le HUD DOM n'est pas capturé par captureStream : pendant l'enregistrement on
+   dessine un habillage directement dans le canvas (titre, compteurs, watermark). */
+let recorder=null, exportMode=false;
+function drawExportHud(){
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  const pad=18;
+  ctx.textAlign='left'; ctx.textBaseline='top';
+  ctx.font='italic 900 26px Fraunces'; ctx.fillStyle='#C8542E';
+  ctx.fillText('LA FRANCE DES TRANSMISSIONS', pad, pad);
+  ctx.font='600 13px Outfit'; ctx.fillStyle='#6B5A48';
+  ctx.fillText(`Toutes les ${CADENCE} minutes, une entreprise française change de mains — BODACC, données réelles`, pad, pad+32);
+  ctx.textAlign='right';
+  ctx.font='44px VT323'; ctx.fillStyle='#2B2118';
+  ctx.fillText(Math.round(disp.count).toLocaleString('fr-FR')+' transmissions', vw-pad, pad-4);
+  ctx.font='23px VT323'; ctx.fillStyle='#C8542E';
+  ctx.fillText((REAL?'≥ ':'')+fmtCompact(disp.money)+' échangés', vw-pad, pad+40);
+  ctx.fillStyle='#A8431F';
+  ctx.fillText(Math.round(disp.dead*LIQ_RATIO).toLocaleString('fr-FR')+' liquidations judiciaires', vw-pad, pad+64);
+  if(currentDate){ ctx.font='19px VT323'; ctx.fillStyle='#8C7A66'; ctx.fillText(fmtDate(currentDate), vw-pad, pad+90); }
+  ctx.font='700 14px Outfit'; ctx.fillStyle='#C8542E';
+  ctx.fillText('laboutiquepme.com', vw-pad, vh-pad-16);
+}
+function stopExport(){ if(recorder && recorder.state!=='inactive') recorder.stop(); }
+function startExport(){
+  if(recorder) return;
+  initAudio();
+  const bRec=document.getElementById('b-rec');
+  const stream=canvas.captureStream(30);
+  try{
+    if(AC&&master){
+      const dest=AC.createMediaStreamDestination();
+      master.connect(dest);
+      dest.stream.getAudioTracks().forEach(tr=>stream.addTrack(tr));
+    }
+  }catch(e){}
+  const mime=['video/mp4;codecs=avc1','video/webm;codecs=vp9','video/webm']
+    .find(m=>window.MediaRecorder&&MediaRecorder.isTypeSupported(m))||'';
+  const chunks=[];
+  recorder=new MediaRecorder(stream, mime?{mimeType:mime,videoBitsPerSecond:10e6}:{videoBitsPerSecond:10e6});
+  recorder.ondataavailable=e=>{ if(e.data&&e.data.size) chunks.push(e.data); };
+  recorder.onstop=()=>{
+    const ext=(recorder.mimeType||'').includes('mp4')?'mp4':'webm';
+    const blob=new Blob(chunks,{type:recorder.mimeType||'video/webm'});
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download='la-france-des-transmissions.'+ext;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(a.href),10000);
+    recorder=null; exportMode=false;
+    bRec.classList.remove('rec'); bRec.textContent='⏺';
+  };
+  recorder.start(250);
+  exportMode=true;
+  bRec.classList.add('rec'); bRec.textContent='⏹';
+}
+document.getElementById('b-rec').onclick=()=>{ recorder? stopExport() : startExport(); };
+
+/* ---------- Contrôles ---------- */
+const bPause=document.getElementById('b-pause');
+bPause.onclick=()=>{ paused=!paused; bPause.textContent=paused?'▶':'⏸'; bPause.classList.toggle('on',paused); };
+['b-x1','b-x2','b-x4'].forEach(id=>{
+  const el=document.getElementById(id);
+  el.onclick=()=>{
+    speed=+el.dataset.speed;
+    ['b-x1','b-x2','b-x4'].forEach(x=>document.getElementById(x).classList.toggle('on',x===id));
+  };
+});
+const bSound=document.getElementById('b-sound');
+bSound.onclick=()=>{ soundOn=!soundOn; bSound.textContent=soundOn?'♪':'∅'; bSound.classList.toggle('on',!soundOn); };
+document.getElementById('b-fit').onclick=()=>setAutoFit(true);
+
+document.getElementById('b-start').onclick=()=>{
+  initAudio();
+  document.getElementById('overlay-intro').style.display='none';
+  running=true;
+};
+document.getElementById('b-start-rec').onclick=(e)=>{
+  e.preventDefault();
+  initAudio();
+  document.getElementById('overlay-intro').style.display='none';
+  running=true;
+  startExport();
+};
+document.getElementById('b-replay').onclick=()=>location.reload();
+function showEnd(){
+  const d=PERIOD.days;
+  document.getElementById('end-title').innerHTML =
+    (d<=1? 'Une journée.' : d+' jours.')+' <em>Une ville entière.</em>';
+  const el=document.getElementById('end-stats');
+  const liqTotal = (LIQ_TOTAL!=null? LIQ_TOTAL : stats.dead);
+  el.innerHTML =
+    `Du ${fmtDate(PERIOD.from)} au ${fmtDate(PERIOD.to)}&nbsp;:<br>`+
+    `${stats.count.toLocaleString('fr-FR')} entreprises et fonds de commerce ont changé de mains,<br>`+
+    `pour au moins ${fmtCompact(stats.money)}${REAL? ` — prix publié dans ${REAL.stats.priceRate} % des annonces`:''}.<br>`+
+    `${liqTotal.toLocaleString('fr-FR')} ont été placées en liquidation judiciaire.`;
+  document.getElementById('overlay-end').style.display='flex';
+  setTimeout(stopExport, 1500);                     // clôt l'export vidéo s'il est en cours
+}
+
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
